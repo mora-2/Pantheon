@@ -19,17 +19,19 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <time.h>
-#include<cassert>
+#include <cassert>
 
 #include <iostream>
 #include "seal/seal.h"
 
-#include<globals.h>
+#include <globals.h>
 #include "utils.hpp"
 #include <openssl/sha.h>
 
 using namespace std;
 using namespace seal;
+
+#pragma region ConfigParams
 
 #define NUM_COL_THREAD (NUM_COL)
 #define NUM_ROW_THREAD NUM_THREAD
@@ -43,26 +45,30 @@ int TOTAL_MACHINE_THREAD = 32;
 #define NUM_EXPONENT_THREAD (TOTAL_MACHINE_THREAD / (NUM_COL_THREAD * NUM_ROW_THREAD))
 // #define NUM_EXPONENT_THREAD (TOTAL_MACHINE_THREAD / (NUM_COL_THREAD ))
 
-typedef  std::vector<seal::Ciphertext> PIRQuery;
-typedef  seal::Ciphertext PIRResponse;
+typedef std::vector<seal::Ciphertext> PIRQuery;
+typedef seal::Ciphertext PIRResponse;
 
-struct column_thread_arg {
+struct column_thread_arg
+{
 
     int col_id;
     int row_idx;
     Ciphertext *column_result;
-    column_thread_arg(int c_id, int r_idx, Ciphertext *res) {
+    column_thread_arg(int c_id, int r_idx, Ciphertext *res)
+    {
         col_id = c_id;
         row_idx = r_idx;
         column_result = res;
     }
 };
 
-struct mult_thread_arg {
+struct mult_thread_arg
+{
     int id;
     int diff;
     Ciphertext *column_result;
-    mult_thread_arg(int _id, int _diff, Ciphertext *_column_result) {
+    mult_thread_arg(int _id, int _diff, Ciphertext *_column_result)
+    {
         id = _id;
         diff = _diff;
         column_result = _column_result;
@@ -84,7 +90,7 @@ void print_report();
 void init_pir_params();
 uint32_t get_next_power_of_two(uint32_t number);
 uint32_t get_number_of_bits(uint64_t number);
-void set_pir_db(std::vector<std::vector<uint64_t> > db);
+void set_pir_db(std::vector<std::vector<uint64_t>> db);
 void pir_encode_db(std::vector<std::vector<uint64_t>> db);
 Ciphertext get_sum(Ciphertext *query, uint32_t start, uint32_t end);
 vector<uint64_t> rotate_plain(std::vector<uint64_t> original, int index);
@@ -98,7 +104,6 @@ uint64_t number_of_items = 0;
 SEALContext *context;
 
 MemoryPoolHandle *column_pools;
-
 
 Evaluator *evaluator;
 BatchEncoder *batch_encoder;
@@ -123,13 +128,12 @@ int *row_thread_id;
 
 pthread_t *pir_thread;
 int *pir_thread_id;
-//pthread_t *col_process_thread;
+// pthread_t *col_process_thread;
 int *col_thread_id;
 
 uint64_t *mult_time;
 uint64_t *col_processing_time;
 uint64_t *row_agg_time;
-
 
 uint64_t query_gen_time, expansion_time, step1_time, step2_time, total_time;
 
@@ -149,9 +153,14 @@ pthread_mutex_t print_lock = PTHREAD_MUTEX_INITIALIZER;
 
 unsigned long *row_thread_processing_time_arr;
 
+#pragma endregion
+
 int main(int argc, char **argv)
 {
-
+#pragma region ScanInput
+    /*-----------------------------------------------------------------*/
+    /*                           Scan input                            */
+    /*-----------------------------------------------------------------*/
     int option;
     const char *optstring = "n:k:s:t:";
     while ((option = getopt(argc, argv, optstring)) != -1)
@@ -177,15 +186,36 @@ int main(int argc, char **argv)
             return 1;
         }
     }
-    if(!number_of_items) {cout<<"Missing -n\n";return 0;}
-    if(!NUM_THREAD) {cout<<"Missing -t\n";return 0;}
-    if(!key_size) {cout<<"Missing -k\n"; return 0;}
-    if(!pir_obj_size) {cout<<"Missing -s\n";return 0;} 
+    if (!number_of_items)
+    {
+        cout << "Missing -n\n";
+        return 0;
+    }
+    if (!NUM_THREAD)
+    {
+        cout << "Missing -t\n";
+        return 0;
+    }
+    if (!key_size)
+    {
+        cout << "Missing -k\n";
+        return 0;
+    }
+    if (!pir_obj_size)
+    {
+        cout << "Missing -s\n";
+        return 0;
+    }
 
-    NUM_COL = (int) ceil(key_size / (2.0 * PLAIN_BIT));
-    NUM_ROW = (int) ceil(number_of_items / ((double)(N / 2)));
+    NUM_COL = (int)ceil(key_size / (2.0 * PLAIN_BIT));
+    NUM_ROW = (int)ceil(number_of_items / ((double)(N / 2)));
     init_pir_params();
+#pragma endregion
 
+#pragma region CryptoParamSet
+    /*-----------------------------------------------------------------*/
+    /*                           CryptoParamSet                        */
+    /*-----------------------------------------------------------------*/
     chrono::high_resolution_clock::time_point time_start, time_end, total_start, total_end;
     clock_t total_cpu_start, total_cpu_end, cpu_start, cpu_end;
     std::stringstream ss, qss;
@@ -199,7 +229,6 @@ int main(int argc, char **argv)
     parms.set_poly_modulus_degree(N);
     parms.set_coeff_modulus(CoeffModulus::Create(N, CT_PRIMES));
 
-
     parms.set_plain_modulus(PLAIN_MODULUS);
 
     context = new SEALContext(parms);
@@ -209,11 +238,11 @@ int main(int argc, char **argv)
     SecretKey secret_key = keygen.secret_key();
     keygen.create_relin_keys(relin_keys);
 
-
-    set<int> rotation_steps;  
+    set<int> rotation_steps;
     rotation_steps.insert(0);
 
-    for (int i = N / (2 * NUM_COL); i < N / 2; i *= 2) {
+    for (int i = N / (2 * NUM_COL); i < N / 2; i *= 2)
+    {
         rotation_steps.insert(i);
     }
 
@@ -228,10 +257,11 @@ int main(int argc, char **argv)
     Decryptor decryptor(*context, secret_key);
 
     column_pools = new MemoryPoolHandle[NUM_COL];
-    for(int i = 0; i < NUM_COL; i++) {
+    for (int i = 0; i < NUM_COL; i++)
+    {
         column_pools[i] = MemoryPoolHandle::New();
     }
-    
+
     batch_encoder = new BatchEncoder(*context);
     size_t slot_count = batch_encoder->slot_count();
     size_t row_size = slot_count / 2;
@@ -239,7 +269,12 @@ int main(int argc, char **argv)
     client_query_ct = new Ciphertext();
     server_query_ct = new Ciphertext();
     one_ct = new Ciphertext();
+#pragma endregion
 
+#pragma region OneCiphertext
+    /*-----------------------------------------------------------------*/
+    /*                           OneCiphertext                         */
+    /*-----------------------------------------------------------------*/
     vector<uint64_t> temp_mat;
     Plaintext temp_pt;
 
@@ -259,33 +294,49 @@ int main(int argc, char **argv)
     }
 
     compact_pid = one_ct->parms_id();
-    populate_db();
-    vector<vector<uint64_t>> pir_db; //64 bit placeholder for 16 bit plaintext coefficients
+#pragma endregion
 
-    for(int i = 0; i < pir_num_obj; i++) {
+#pragma region SetupDB
+    /*-----------------------------------------------------------------*/
+    /*                           SetupDB                               */
+    /*-----------------------------------------------------------------*/
+    populate_db();
+    vector<vector<uint64_t>> pir_db; // 64 bit placeholder for 16 bit plaintext coefficients
+
+    for (int i = 0; i < pir_num_obj; i++)
+    {
         vector<uint64_t> v;
-        for(int j = 0; j < (pir_obj_size / 2); j++) {  // 2 bytes each plaintxt slot
+        for (int j = 0; j < (pir_obj_size / 2); j++)
+        { // 2 bytes each plaintxt slot
             v.push_back(rand() % PLAIN_MODULUS);
         }
         pir_db.push_back(v);
     }
 
     set_pir_db(pir_db);
-    //cout << "DB population complete!" << endl;
+    // cout << "DB population complete!" << endl;
+#pragma endregion
 
-
+#pragma region QueryMake
+    /*-----------------------------------------------------------------*/
+    /*                           QueryMake                             */
+    /*-----------------------------------------------------------------*/
 
     int desired_index = 100;
     int val = desired_index + 1;
     const char str[] = {val & 0xFF, (val >> 8) & 0xFF, (val >> 16) & 0xFF, (val >> 24) & 0xFF, 0};
 
-	unsigned char hash[SHA256_DIGEST_LENGTH];
-    sha256(str,4, hash);
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    sha256(str, 4, hash);
 
-    for(int i = 0; i < NUM_COL; i++) {
-        for(int j = i * (N/(NUM_COL*2)); j < ((i + 1) * (N/(NUM_COL*2))); j++) {
-            client_query_mat[j] = (uint64_t(hash[4*i]) << 8) + hash[4*i + 1];;
-            client_query_mat[j + (N/2)] = (uint64_t(hash[4*i + 2]) << 8) + hash[4*i + 3];;
+    for (int i = 0; i < NUM_COL; i++)
+    {
+        for (int j = i * (N / (NUM_COL * 2)); j < ((i + 1) * (N / (NUM_COL * 2))); j++)
+        {
+            client_query_mat[j] = (uint64_t(hash[4 * i]) << 8) + hash[4 * i + 1];
+            ;
+            client_query_mat[j + (N / 2)] = (uint64_t(hash[4 * i + 2]) << 8) + hash[4 * i + 3];
+            ;
         }
     }
 
@@ -315,13 +366,19 @@ int main(int argc, char **argv)
 
     batch_encoder->encode(client_query_mat, client_query_pt);
     Serializable<Ciphertext> ser_query = encryptor.encrypt_symmetric(client_query_pt);
-    ser_query.save(qss);
+    ser_query.save(qss); // save query ciphertext
 
     time_end = chrono::high_resolution_clock::now();
     query_gen_time = (chrono::duration_cast<chrono::microseconds>(time_end - time_start)).count();
 
     printf("query size (Byte): %lu\n", qss.str().size());
 
+#pragma endregion
+
+#pragma region QueryExpand
+    /*-----------------------------------------------------------------*/
+    /*                           QueryExpand                           */
+    /*-----------------------------------------------------------------*/
 
     query_expansion_thread = new pthread_t[NUM_COL];
     expansion_thread_id = new int[NUM_COL];
@@ -357,7 +414,7 @@ int main(int argc, char **argv)
     total_start = chrono::high_resolution_clock::now();
     total_cpu_start = clock();
 
-    server_query_ct->load(*context, qss);
+    server_query_ct->load(*context, qss); // load query ciphertext
 
     total_start = chrono::high_resolution_clock::now();
 
@@ -380,20 +437,27 @@ int main(int argc, char **argv)
     time_end = chrono::high_resolution_clock::now();
     expansion_time = (chrono::duration_cast<chrono::microseconds>(time_end - time_start)).count();
     auto query_expansion_cpu_time = double(cpu_end - cpu_start) / double(CLOCKS_PER_SEC);
+#pragma endregion
 
+#pragma region Process1
+    /*-----------------------------------------------------------------*/
+    /*                           Process1                              */
+    /*-----------------------------------------------------------------*/
     time_start = chrono::high_resolution_clock::now();
     cpu_start = clock();
 
-    if(NUM_ROW_THREAD == 1) {
+    if (NUM_ROW_THREAD == 1)
+    {
         process_rows((void *)&(row_thread_id[0]));
-    }else {
+    }
+    else
+    {
         for (int i = 0; i < NUM_ROW_THREAD; i++)
         {
             if (pthread_create(&(row_process_thread[i]), NULL, process_rows, (void *)&(row_thread_id[i])))
             {
                 printf("Error creating processing thread");
             }
-
         }
 
         for (int i = 0; i < NUM_ROW_THREAD; i++)
@@ -404,7 +468,12 @@ int main(int argc, char **argv)
 
     time_end = chrono::high_resolution_clock::now();
     step1_time = (chrono::duration_cast<chrono::microseconds>(time_end - time_start)).count();
-   
+#pragma endregion
+
+#pragma region Process2
+    /*-----------------------------------------------------------------*/
+    /*                           Process2                              */
+    /*-----------------------------------------------------------------*/
     time_start = chrono::high_resolution_clock::now();
 
     for (int i = 0; i < NUM_PIR_THREAD; i++)
@@ -419,7 +488,8 @@ int main(int argc, char **argv)
     {
         pthread_join(pir_thread[i], NULL);
     }
-    for(int i = 1; i < NUM_PIR_THREAD; i++) {
+    for (int i = 1; i < NUM_PIR_THREAD; i++)
+    {
         my_add_inplace(*context, pir_results[0], pir_results[i]);
     }
     cpu_end = clock();
@@ -430,6 +500,12 @@ int main(int argc, char **argv)
 
     Ciphertext final_result = pir_results[0];
     final_result.save(ss);
+#pragma endregion
+
+#pragma region Reconstruct
+    /*-----------------------------------------------------------------*/
+    /*                           Reconstruct                           */
+    /*-----------------------------------------------------------------*/
 
     total_cpu_end = clock();
     total_end = chrono::high_resolution_clock::now();
@@ -437,16 +513,22 @@ int main(int argc, char **argv)
     auto latency = (chrono::duration_cast<chrono::microseconds>(total_end - total_start)).count();
 
     cout << "Result noise budget " << decryptor.invariant_noise_budget(final_result) << endl;
-   
+
     decryptor.decrypt(final_result, result_pt);
     batch_encoder->decode(result_pt, result_mat);
 
     vector<uint64_t> decoded_response;
     decoded_response = rotate_plain(result_mat, desired_index % row_size);
+#pragma endregion
+
+#pragma region Validate
+    /*-----------------------------------------------------------------*/
+    /*                           Validate                              */
+    /*-----------------------------------------------------------------*/
     bool incorrect_result = false;
-    for (int i = 0; i < pir_obj_size / 4 ; i++)
+    for (int i = 0; i < pir_obj_size / 4; i++)
     {
-        if ((pir_db[desired_index][i] != decoded_response[i]) || (pir_db[desired_index][i + pir_obj_size / 4] != decoded_response[i + N/2]))
+        if ((pir_db[desired_index][i] != decoded_response[i]) || (pir_db[desired_index][i + pir_obj_size / 4] != decoded_response[i + N / 2]))
         {
             incorrect_result = true;
             break;
@@ -455,50 +537,58 @@ int main(int argc, char **argv)
 
     if (incorrect_result)
     {
-        std::cout << "Result is incorrect!" << std::endl<<std::endl;
+        std::cout << "Result is incorrect!" << std::endl
+                  << std::endl;
     }
     else
     {
-        std::cout << "Result is correct!" << std::endl<<std::endl;
+        std::cout << "Result is correct!" << std::endl
+                  << std::endl;
         print_report();
     }
+#pragma endregion
+
     return 0;
 }
 
-void print_report() {
-    
-    cout<<"Query expansion time (ms): "<<expansion_time / 1000<<endl;
-    cout<<"Equality check time (ms): "<<step1_time / 1000<<endl;
-    cout<<"PIR time (ms): "<<step2_time / 1000<<endl;
-    cout<<"Total processing time (ms): "<<total_time / 1000<<endl;
+void print_report()
+{
+
+    cout << "Query expansion time (ms): " << expansion_time / 1000 << endl;
+    cout << "Equality check time (ms): " << step1_time / 1000 << endl;
+    cout << "PIR time (ms): " << step2_time / 1000 << endl;
+    cout << "Total processing time (ms): " << total_time / 1000 << endl;
 }
 
 void populate_db()
 {
-    vector<vector<uint64_t> > mat_db;
-    for(int i = 0;  i < NUM_ROW * NUM_COL; i++) {
+    vector<vector<uint64_t>> mat_db;
+    for (int i = 0; i < NUM_ROW * NUM_COL; i++)
+    {
         vector<uint64_t> v(N, 0ULL);
         mat_db.push_back(v);
     }
     unsigned char hash[SHA256_DIGEST_LENGTH];
 
-    for (uint32_t row = 0; row < NUM_ROW * (N/2); row++)
+    for (uint32_t row = 0; row < NUM_ROW * (N / 2); row++)
     {
-        uint32_t row_in_vector = row % (N/2);
+        uint32_t row_in_vector = row % (N / 2);
         uint32_t val = row + 1;
         const char str[] = {val & 0xFF, (val >> 8) & 0xFF, (val >> 16) & 0xFF, (val >> 24) & 0xFF, 0};
-        sha256(str,4, hash);
-        for(int col = 0; col < NUM_COL; col++) {
-            int vector_idx = (row / (N/2)) * NUM_COL + col;
-            mat_db[vector_idx][row_in_vector] = (uint64_t(hash[4*col]) << 8) + hash[4*col + 1];
-            mat_db[vector_idx][row_in_vector + (N/2)] = (uint64_t(hash[4*col + 2]) << 8) + hash[4*col + 3];
-
+        sha256(str, 4, hash);
+        for (int col = 0; col < NUM_COL; col++)
+        {
+            int vector_idx = (row / (N / 2)) * NUM_COL + col;
+            mat_db[vector_idx][row_in_vector] = (uint64_t(hash[4 * col]) << 8) + hash[4 * col + 1];
+            mat_db[vector_idx][row_in_vector + (N / 2)] = (uint64_t(hash[4 * col + 2]) << 8) + hash[4 * col + 3];
         }
     }
 
-    for(int i = 0; i < NUM_ROW; i++) {
+    for (int i = 0; i < NUM_ROW; i++)
+    {
         vector<Plaintext> row_partition;
-        for(int j = 0; j < NUM_COL; j++) {
+        for (int j = 0; j < NUM_COL; j++)
+        {
             Plaintext pt;
             batch_encoder->encode(mat_db[i * NUM_COL + j], pt);
             row_partition.push_back(pt);
@@ -528,16 +618,18 @@ void *expand_query(void *arg)
 
 void *process_rows(void *arg)
 {
-    int id = *((int *)arg);// row thread ID
+    int id = *((int *)arg); // row thread ID
     Ciphertext column_results[NUM_COL];
     Ciphertext pir_results[NUM_PIR_THREAD];
     vector<column_thread_arg> column_args;
     vector<mult_thread_arg> mult_args;
 
-    for(int i = 0; i < NUM_COL_THREAD; i++) {
+    for (int i = 0; i < NUM_COL_THREAD; i++)
+    {
         column_args.push_back(column_thread_arg(i, id, column_results));
     }
-    for(int i = 0; i < NUM_COL; i++) {
+    for (int i = 0; i < NUM_COL; i++)
+    {
         mult_args.push_back(mult_thread_arg(i, 1, column_results));
     }
     int num_row_per_thread = NUM_ROW / NUM_ROW_THREAD;
@@ -547,8 +639,8 @@ void *process_rows(void *arg)
     pthread_t col_process_thread[NUM_COL_THREAD];
     pthread_t col_mult_thread[NUM_COL_THREAD];
 
-
-    for(int row_idx = start_idx; row_idx < end_idx; row_idx++) { 
+    for (int row_idx = start_idx; row_idx < end_idx; row_idx++)
+    {
         // time_start = chrono::high_resolution_clock::now();
 
         for (int i = 0; i < NUM_COL_THREAD; i++)
@@ -565,12 +657,14 @@ void *process_rows(void *arg)
             pthread_join(col_process_thread[i], NULL);
         }
 
-        for(int diff = 2; diff <= NUM_COL; diff*=2) {
+        for (int diff = 2; diff <= NUM_COL; diff *= 2)
+        {
 
-            for(int i = 0; i < mult_args.size(); i++) {
+            for (int i = 0; i < mult_args.size(); i++)
+            {
                 mult_args[i].diff = diff;
             }
-            for (int i = 0; i < NUM_COL; i+=diff)
+            for (int i = 0; i < NUM_COL; i += diff)
             {
                 if (pthread_create(&(col_mult_thread[i]), NULL, multiply_columns, (void *)&(mult_args[i])))
                 {
@@ -578,26 +672,24 @@ void *process_rows(void *arg)
                 }
             }
 
-            for (int i = 0; i < NUM_COL; i+=diff)
+            for (int i = 0; i < NUM_COL; i += diff)
             {
                 pthread_join(col_mult_thread[i], NULL);
             }
-
         }
 
         Ciphertext temp_ct = column_results[0];
         my_conjugate_internal(*context, temp_ct, galois_keys, column_pools[0], TOTAL_MACHINE_THREAD / NUM_ROW_THREAD);
 
         my_bfv_multiply(*context, column_results[0], temp_ct, column_pools[0], TOTAL_MACHINE_THREAD / NUM_ROW_THREAD);
-        my_relinearize_internal(*context, column_results[0] ,relin_keys, 2, MemoryManager::GetPool(), TOTAL_MACHINE_THREAD / NUM_ROW_THREAD);
-        my_transform_to_ntt_inplace(*context, column_results[0], TOTAL_MACHINE_THREAD );
+        my_relinearize_internal(*context, column_results[0], relin_keys, 2, MemoryManager::GetPool(), TOTAL_MACHINE_THREAD / NUM_ROW_THREAD);
+        my_transform_to_ntt_inplace(*context, column_results[0], TOTAL_MACHINE_THREAD);
         row_result[row_idx] = column_results[0];
-
     }
-
 }
 
-void *process_pir(void *arg) {
+void *process_pir(void *arg)
+{
     int my_id = *((int *)arg);
     int column_per_thread = (pir_num_columns_per_obj / 2) / NUM_PIR_THREAD;
     int start_idx = my_id * column_per_thread;
@@ -605,29 +697,30 @@ void *process_pir(void *arg) {
     pir_results[my_id] = get_sum(row_result, start_idx, end_idx);
 
     int mask = 1;
-    while(mask <= start_idx) {
-        if(start_idx & mask) {
-            my_rotate_internal(*context, pir_results[my_id] , -mask, galois_keys, MemoryManager::GetPool(), TOTAL_MACHINE_THREAD/NUM_PIR_THREAD);
+    while (mask <= start_idx)
+    {
+        if (start_idx & mask)
+        {
+            my_rotate_internal(*context, pir_results[my_id], -mask, galois_keys, MemoryManager::GetPool(), TOTAL_MACHINE_THREAD / NUM_PIR_THREAD);
         }
         mask <<= 1;
-
     }
 }
 
-
-void *multiply_columns(void *arg) {
+void *multiply_columns(void *arg)
+{
     mult_thread_arg mult_arg = *((mult_thread_arg *)arg);
     Ciphertext *column_results = mult_arg.column_result;
     int id = mult_arg.id;
     int diff = mult_arg.diff;
     int num_threads = TOTAL_MACHINE_THREAD / (NUM_COL / diff);
 
-    my_bfv_multiply(*context, column_results[id], column_results[id + (diff/2)], column_pools[id], num_threads);
-    my_relinearize_internal(*context, column_results[id] ,relin_keys, 2, column_pools[id], num_threads); 
+    my_bfv_multiply(*context, column_results[id], column_results[id + (diff / 2)], column_pools[id], num_threads);
+    my_relinearize_internal(*context, column_results[id], relin_keys, 2, column_pools[id], num_threads);
 }
 
-
-void *process_columns(void *arg) {
+void *process_columns(void *arg)
+{
 
     column_thread_arg col_arg = *((column_thread_arg *)arg);
     vector<unsigned long> exp_time;
@@ -635,24 +728,24 @@ void *process_columns(void *arg) {
     int num_col_per_thread = NUM_COL / NUM_COL_THREAD;
     int start_idx = num_col_per_thread * col_arg.col_id;
     int end_idx = start_idx + num_col_per_thread;
-    for(int i = start_idx; i < end_idx; i++) {
+    for (int i = start_idx; i < end_idx; i++)
+    {
         Ciphertext sub;
         Ciphertext prod;
         evaluator->sub_plain(expanded_query[i], db[col_arg.row_idx][i], sub);
 
-        for (int k = 0; k < 16; k++){
+        for (int k = 0; k < 16; k++)
+        {
             my_bfv_square(*context, sub, column_pools[i], NUM_EXPONENT_THREAD);
             my_relinearize_internal(*context, sub, relin_keys, 2, column_pools[i], NUM_EXPONENT_THREAD);
         }
-        for(int k = 0; k < MOD_SWITCH_COUNT; k++) {
+        for (int k = 0; k < MOD_SWITCH_COUNT; k++)
+        {
             my_mod_switch_scale_to_next(*context, sub, sub, column_pools[i], NUM_EXPONENT_THREAD);
         }
         evaluator->sub(*one_ct, sub, (col_arg.column_result)[i]);
-
     }
 }
-
-
 
 /*****************************PIR functions ************************************/
 /******************************************************************************/
@@ -701,7 +794,6 @@ uint32_t get_next_power_of_two(uint32_t number)
     return (1 << number_of_bits);
 }
 
-
 uint32_t get_number_of_bits(uint64_t number)
 {
     uint32_t count = 0;
@@ -713,17 +805,18 @@ uint32_t get_number_of_bits(uint64_t number)
     return count;
 }
 
-
-void set_pir_db(std::vector<std::vector<uint64_t> > db)
+void set_pir_db(std::vector<std::vector<uint64_t>> db)
 {
     assert(db.size() == pir_num_obj);
-    std::vector<std::vector<uint64_t> > extended_db(pir_db_rows);
-    for(int i = 0; i < pir_db_rows; i++) {
+    std::vector<std::vector<uint64_t>> extended_db(pir_db_rows);
+    for (int i = 0; i < pir_db_rows; i++)
+    {
         extended_db[i] = std::vector<uint64_t>(N, 1ULL);
     }
-    int row_size = N/2;
+    int row_size = N / 2;
 
-    for(int i = 0; i < pir_num_obj;i++) {
+    for (int i = 0; i < pir_num_obj; i++)
+    {
         std::vector<uint64_t> temp = db[i];
 
         int row = (i / row_size);
@@ -731,11 +824,10 @@ void set_pir_db(std::vector<std::vector<uint64_t> > db)
         for (int j = 0; j < pir_num_columns_per_obj / 2; j++)
         {
             extended_db[row][col] = temp[j];
-            extended_db[row][col+row_size] = temp[j+(pir_num_columns_per_obj / 2)];
+            extended_db[row][col + row_size] = temp[j + (pir_num_columns_per_obj / 2)];
             row += pir_num_query_ciphertext;
         }
-
-    }   
+    }
     pir_encode_db(extended_db);
     return;
 }
@@ -747,7 +839,6 @@ void pir_encode_db(std::vector<std::vector<uint64_t>> db)
     {
         batch_encoder->encode(db[i], pir_encoded_db[i]);
         evaluator->transform_to_ntt_inplace(pir_encoded_db[i], compact_pid);
-
     }
 }
 
@@ -768,17 +859,16 @@ vector<uint64_t> rotate_plain(std::vector<uint64_t> original, int index)
 void init_pir_params()
 {
     pir_plain_bit_count = 16;
-    pir_num_obj = ((N/2) * NUM_ROW);
-    pir_num_query_ciphertext = ceil(pir_num_obj / (double)(N/2));
-    pir_num_columns_per_obj = 2 * (ceil(((pir_obj_size/2) * 8) / (float)(pir_plain_bit_count)));
+    pir_num_obj = ((N / 2) * NUM_ROW);
+    pir_num_query_ciphertext = ceil(pir_num_obj / (double)(N / 2));
+    pir_num_columns_per_obj = 2 * (ceil(((pir_obj_size / 2) * 8) / (float)(pir_plain_bit_count)));
     pir_db_rows = ceil(pir_num_obj / (double)N) * pir_num_columns_per_obj;
 
     return;
-
 }
 
 void sha256(const char *str, int len, unsigned char *dest)
-{    
+{
     SHA256_CTX sha256;
     SHA256_Init(&sha256);
     SHA256_Update(&sha256, str, len);
