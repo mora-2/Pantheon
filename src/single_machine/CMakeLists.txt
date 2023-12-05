@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.10)
 
 project(Pantheon VERSION 1.0 LANGUAGES CXX)
 
+set(CMAKE_C_COMPILER gcc)
+set(CMAKE_CXX_COMPILER g++)
+set(CMAKE_CXX_STANDARD 17)
+
 include(CheckCXXCompilerFlag)
 function(seal_enable_cxx_compiler_flag_if_supported flag)
     string(FIND "${CMAKE_CXX_FLAGS}" "${flag}" flag_already_set)
@@ -17,7 +21,7 @@ endfunction()
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-seal_enable_cxx_compiler_flag_if_supported("-O3")
+seal_enable_cxx_compiler_flag_if_supported("-g -O0")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
 include_directories( ${CMAKE_SOURCE_DIR}/../../include)

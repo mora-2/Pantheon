@@ -33,9 +33,11 @@ using namespace seal;
 
 #define NUM_COL_THREAD (NUM_COL)
 #define NUM_ROW_THREAD NUM_THREAD
-#define NUM_PIR_THREAD 4
+// #define NUM_COL_THREAD (NUM_COL)
+// #define NUM_ROW_THREAD NUM_THREAD
+#define NUM_PIR_THREAD 32
 
-int TOTAL_MACHINE_THREAD = 6;
+int TOTAL_MACHINE_THREAD = 32;
 
 #define NUM_EXPANSION_THREAD (TOTAL_MACHINE_THREAD / NUM_COL)
 #define NUM_EXPONENT_THREAD (TOTAL_MACHINE_THREAD / (NUM_COL_THREAD * NUM_ROW_THREAD))
@@ -89,7 +91,7 @@ vector<uint64_t> rotate_plain(std::vector<uint64_t> original, int index);
 
 int NUM_ROW = 32;
 int NUM_COL = 8;
-int NUM_THREAD = 1;
+int NUM_THREAD = 1; // num of row thread
 vector<Plaintext> masks;
 uint64_t number_of_items = 0;
 
@@ -526,7 +528,7 @@ void *expand_query(void *arg)
 
 void *process_rows(void *arg)
 {
-    int id = *((int *)arg);
+    int id = *((int *)arg);// row thread ID
     Ciphertext column_results[NUM_COL];
     Ciphertext pir_results[NUM_PIR_THREAD];
     vector<column_thread_arg> column_args;
@@ -546,7 +548,7 @@ void *process_rows(void *arg)
     pthread_t col_mult_thread[NUM_COL_THREAD];
 
 
-    for(int row_idx = start_idx; row_idx < end_idx; row_idx++) {
+    for(int row_idx = start_idx; row_idx < end_idx; row_idx++) { 
         // time_start = chrono::high_resolution_clock::now();
 
         for (int i = 0; i < NUM_COL_THREAD; i++)
