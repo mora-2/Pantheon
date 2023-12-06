@@ -22,6 +22,3 @@ vector<int> CT_PRIMES({60,60,60,60,60,60,60,60,60,60,60,60,60});
 
 #define LARGE_COEFF_COUNT (((CT_PRIMES.size() - 1) * (N) * 2))
 #define SMALL_COEFF_COUNT (((CT_PRIMES.size() - 1 - MOD_SWITCH_COUNT) * (N) * 2))
-
-typedef  std::vector<seal::Ciphertext> PIRQuery;
-typedef  seal::Ciphertext PIRResponse;
