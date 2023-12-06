@@ -5,7 +5,6 @@
 #include <map>
 #include "seal/context.h"
 #include "seal/relinkeys.h"
-// #include "seal/smallmodulus.h"
 #include "seal/memorymanager.h"
 #include "seal/ciphertext.h"
 #include "seal/plaintext.h"
@@ -21,11 +20,10 @@
 #include "seal/util/polyarithsmallmod.h"
 #include "seal/util/polycore.h"
 #include "seal/util/defines.h"
-
 #include "seal/util/uintarith.h"
 #include <algorithm>
-#include <cmath>
 #include "seal/util/scalingvariant.h"
+#include <cmath>
 #include <functional>
 #include <iostream>
 #include <chrono>

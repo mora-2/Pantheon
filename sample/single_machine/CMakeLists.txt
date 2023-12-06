@@ -24,7 +24,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 seal_enable_cxx_compiler_flag_if_supported("-g -O0")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
-include_directories( ${CMAKE_SOURCE_DIR}/../../include)
+include_directories( ${CMAKE_SOURCE_DIR}/../../pir)
 find_package(SEAL 0.0.0 EXACT REQUIRED)
 find_package(OpenMP REQUIRED)
 add_executable(Pantheon Pantheon.cpp)
