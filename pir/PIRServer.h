@@ -1,5 +1,9 @@
 #pragma once
 #include <cstdint>
+#include "seal/seal.h"
+
+using namespace seal;
+using namespace std;
 
 class PIRServer
 {
@@ -8,78 +12,101 @@ public:
     uint64_t number_of_items;
     uint32_t key_size; // in bits
     uint32_t obj_size;
-    int NUM_ROW = 32;
-    int NUM_COL = 8;
+    static int NUM_ROW;
+    static int NUM_COL;
 
-    std::shared_ptr<vector<vector<Plaintext>>> db;
+    static vector<vector<Plaintext>> db;
     seal::parms_id_type compact_pid; // for one ctx used in db encode
 
     /* PIR params */
     uint32_t pir_num_obj;
     uint32_t pir_obj_size;
     uint32_t pir_key_size; //  in bits
-    uint32_t pir_num_query_ciphertext;
-    uint32_t pir_num_columns_per_obj;
+    static uint32_t pir_num_query_ciphertext;
+    static uint32_t pir_num_columns_per_obj;
     uint32_t pir_plain_bit_count;
     uint32_t pir_db_rows;
 
-    vector<Plaintext> pir_encoded_db;
+    static vector<Plaintext> pir_encoded_db;
 
     /* Crypto params */
     std::unique_ptr<EncryptionParameters> parms;
-    std::unique_ptr<SEALContext> context;
-    std::unique_ptr<KeyGenerator> keygen;
-    SecretKey secret_key; // retain 
-    GaloisKeys galois_keys;
-    RelinKeys relin_keys;
-    std::unique_ptr<Evaluator> evaluator;
+    std::stringstream parms_ss;
+    static std::unique_ptr<SEALContext> context;
+    static GaloisKeys galois_keys;
+    static RelinKeys relin_keys;
+    static std::unique_ptr<Evaluator> evaluator;
     std::unique_ptr<BatchEncoder> batch_encoder;
 
     /* Memory pool */
-    std::shared_ptr<MemoryPoolHandle[]> column_pools;
+    static vector<MemoryPoolHandle> column_pools;
 
-    /* QueryExpand params */
-    vector<Plaintext> masks;
-    std::unique_ptr<pthread_t[]> query_expansion_thread;
-    std::unique_ptr<int[]> expansion_thread_id;
+    /* OneCiphertext */
+    static std::shared_ptr<Ciphertext> one_ct; // receive from client
+
+    /* QueryExpand */
+    static vector<Plaintext> masks;
+    static Ciphertext server_query_ct;
+    static vector<Ciphertext> expanded_query;
 
     /* Process1 */
-    std::unique_ptr<pthread_t[]> row_process_thread;
-    std::unique_ptr<int[]> row_thread_id;
-
-    std::unique_ptr<pthread_t[]> col_process_thread;
+    static vector<Ciphertext> row_result;
 
     /* Process2 */
-    std::unique_ptr<pthread_t[]> pir_thread;
-    std::unique_ptr<int[]> pir_thread_id;
+    static vector<Ciphertext> pir_results;
 
-    /* Ciphertexts */
-    std::shared_ptr<Ciphertext[]> expanded_query;
-    std::shared_ptr<Ciphertext[]> row_result;
-    std::shared_ptr<Ciphertext> one_ct;
-    std::shared_ptr<Ciphertext> server_query_ct;
-    std::shared_ptr<Ciphertext[]> column_results;
-    std::shared_ptr<Ciphertext[]> pir_results;
 
     /* datastream */
-    std::stringstream ss, qss;
+    std::stringstream ss;
 
 private:
-    int NUM_COL_THREAD; // sub thread
-    int NUM_ROW_THREAD; // main thread
-    int NUM_PIR_THREAD;
-    int TOTAL_MACHINE_THREAD;
-    int NUM_EXPANSION_THREAD;
-    int NUM_EXPONENT_THREAD;
+    static int NUM_COL_THREAD; // sub thread
+    static int NUM_ROW_THREAD; // main thread
+    static int NUM_PIR_THREAD;
+    static int TOTAL_MACHINE_THREAD;
+    static int NUM_EXPANSION_THREAD;
+    static int NUM_EXPONENT_THREAD;
 
 public:
     PIRServer(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size);
+    /* Crypto setup */
+    void SetupCryptoParams();
+    //-----------> send parms_ss
+    void SetupKeys(std::stringstream &keys_ss /* relin_keys + galois_keys */);
+
+    /* Receive OneCiphertext */
+    void RecOneCiphertext(std::stringstream &one_ct_ss);
+
+    /* Setup DB */
+    void SetupDB();
+
+    /* QueryExpand */
+    void QueryExpand(std::stringstream &qss);
+
+    /* Process1  */
+    void Process1();
+
+    /* Process2 */
+    void Process2();
+    //-----------> send ss
 
     ~PIRServer();
 
 private:
     void SetupDBParams(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size);
+    void SetupMemPool();
     void SetupThreadParams();
     void SetupPIRParams();
-    void SetupCryptoParams();
+    void populate_db();
+    void sha256(const char *str, int len, unsigned char *dest);
+    void set_pir_db(std::vector<std::vector<uint64_t>> db);
+    void pir_encode_db(std::vector<std::vector<uint64_t>> db);
+    static void *expand_query(void *arg);
+    static void *process_rows(void *arg);
+    static void *process_columns(void *arg);
+    static void *multiply_columns(void *arg);
+    static void *process_pir(void *arg);
+    static Ciphertext get_sum(vector<Ciphertext> &query, uint32_t start, uint32_t end);
+    static uint32_t get_next_power_of_two(uint32_t number);
+    static uint32_t get_number_of_bits(uint64_t number);
 };

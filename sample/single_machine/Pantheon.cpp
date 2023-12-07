@@ -43,8 +43,8 @@ int TOTAL_MACHINE_THREAD = 32;
 #define NUM_EXPONENT_THREAD (TOTAL_MACHINE_THREAD / (NUM_COL_THREAD * NUM_ROW_THREAD))
 // #define NUM_EXPONENT_THREAD (TOTAL_MACHINE_THREAD / (NUM_COL_THREAD ))
 
-typedef std::vector<seal::Ciphertext> PIRQuery;
-typedef seal::Ciphertext PIRResponse;
+// typedef std::vector<seal::Ciphertext> PIRQuery;
+// typedef seal::Ciphertext PIRResponse;
 
 struct column_thread_arg
 {
