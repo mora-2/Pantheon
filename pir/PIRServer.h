@@ -27,6 +27,8 @@ public:
     uint32_t pir_plain_bit_count;
     uint32_t pir_db_rows;
 
+    /* Setup DB */
+    vector<vector<uint64_t>> pir_db; // 64 bit placeholder for 16 bit plaintext coefficients
     static vector<Plaintext> pir_encoded_db;
 
     /* Crypto params */
@@ -54,7 +56,6 @@ public:
 
     /* Process2 */
     static vector<Ciphertext> pir_results;
-
 
     /* datastream */
     std::stringstream ss;

@@ -52,7 +52,7 @@ public:
     //-----------> send qss
 
     /* Reconstruct */
-    void Reconstruct(std::stringstream &ss);
+    vector<uint64_t> Reconstruct(std::stringstream &ss);
 
     ~PIRClient();
 

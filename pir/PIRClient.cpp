@@ -97,7 +97,7 @@ void PIRClient::QueryMake(int desired_index)
     printf("query size (Byte): %lu\n", qss.str().size());
 }
 
-void PIRClient::Reconstruct(std::stringstream &ss)
+vector<uint64_t> PIRClient::Reconstruct(std::stringstream &ss)
 {
     Ciphertext final_result;
     final_result.load(*context, ss);
@@ -109,6 +109,7 @@ void PIRClient::Reconstruct(std::stringstream &ss)
 
     vector<uint64_t> decoded_response;
     decoded_response = rotate_plain(result_mat, desired_index % row_size);
+    return decoded_response;
 }
 
 void PIRClient::SetupDBParams(uint32_t key_size, uint32_t obj_size)

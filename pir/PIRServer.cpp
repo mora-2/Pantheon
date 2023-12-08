@@ -43,8 +43,6 @@ void PIRServer::RecOneCiphertext(std::stringstream &one_ct_ss)
 void PIRServer::SetupDB()
 {
     populate_db();
-    vector<vector<uint64_t>> pir_db; // 64 bit placeholder for 16 bit plaintext coefficients
-
     for (int i = 0; i < pir_num_obj; i++)
     {
         vector<uint64_t> v;
