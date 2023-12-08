@@ -2,8 +2,6 @@ cmake_minimum_required(VERSION 3.10)
 
 project(Pantheon VERSION 1.0 LANGUAGES CXX)
 
-set(CMAKE_C_COMPILER gcc)
-set(CMAKE_CXX_COMPILER g++)
 set(CMAKE_CXX_STANDARD 17)
 
 include(CheckCXXCompilerFlag)
@@ -22,7 +20,7 @@ endfunction()
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 seal_enable_cxx_compiler_flag_if_supported("-g -O0")
 
-set(SOURCE_FILES  PIRClient.cpp PIRServer.cpp utils.hpp)
+set(SOURCE_FILES  PIRClient.cpp PIRServer.cpp globals.cpp utils.cpp)
 file(GLOB HEADERS "*.h")
 add_library(Pantheon ${SOURCE_FILES} ${HEADERS})
 

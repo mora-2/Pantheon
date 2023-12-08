@@ -54,7 +54,7 @@ public:
     /* Reconstruct */
     vector<uint64_t> Reconstruct(std::stringstream &ss);
 
-    ~PIRClient();
+    ~PIRClient() = default;
 
 private:
     void SetupDBParams(uint32_t key_size, uint32_t obj_size);

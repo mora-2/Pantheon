@@ -4,7 +4,7 @@
 #include <set>
 #include <openssl/sha.h>
 #include "config.h"
-#include "utils.hpp"
+#include "utils.h"
 #include <cassert>
 
 PIRServer::PIRServer(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size)
@@ -37,7 +37,8 @@ void PIRServer::SetupKeys(std::stringstream &keys_ss)
 
 void PIRServer::RecOneCiphertext(std::stringstream &one_ct_ss)
 {
-    this->one_ct->load(*context, one_ct_ss);
+    this->one_ct.load(*context, one_ct_ss);
+    this->compact_pid = one_ct.parms_id();
 }
 
 void PIRServer::SetupDB()
@@ -84,9 +85,11 @@ void PIRServer::QueryExpand(std::stringstream &qss)
     server_query_ct.load(*context, qss); // load query ciphertext
 
     my_transform_to_ntt_inplace(*context, server_query_ct, TOTAL_MACHINE_THREAD);
+    PIRServer::ExpandQueryStructure *expand_query_structure_ptr[NUM_COL];
     for (int i = 0; i < NUM_COL; i++)
     {
-        if (pthread_create(&(query_expansion_thread[i]), NULL, expand_query, (void *)&(expansion_thread_id[i])))
+        expand_query_structure_ptr[i] = new PIRServer::ExpandQueryStructure(expansion_thread_id[i], this);
+        if (pthread_create(&(query_expansion_thread[i]), NULL, expand_query, static_cast<void *>(expand_query_structure_ptr[i])))
         {
             printf("Error creating expansion thread");
         }
@@ -94,6 +97,7 @@ void PIRServer::QueryExpand(std::stringstream &qss)
     for (int i = 0; i < NUM_COL; i++)
     {
         pthread_join(query_expansion_thread[i], NULL);
+        delete expand_query_structure_ptr[i];
     }
 }
 
@@ -107,15 +111,19 @@ void PIRServer::Process1()
         row_thread_id[i] = i;
     }
 
+    PIRServer::ProcessRowStructure *process_row_structure_ptr[NUM_ROW_THREAD];
     if (NUM_ROW_THREAD == 1)
     {
-        process_rows((void *)&(row_thread_id[0]));
+        process_row_structure_ptr[0] = new PIRServer::ProcessRowStructure(row_thread_id[0], this);
+        process_rows(static_cast<void *>(process_row_structure_ptr[0]));
+        delete process_row_structure_ptr[0];
     }
     else
     {
         for (int i = 0; i < NUM_ROW_THREAD; i++)
         {
-            if (pthread_create(&(row_process_thread[i]), NULL, process_rows, (void *)&(row_thread_id[i])))
+            process_row_structure_ptr[i] = new PIRServer::ProcessRowStructure(row_thread_id[i], this);
+            if (pthread_create(&(row_process_thread[i]), NULL, process_rows, static_cast<void *>(process_row_structure_ptr[i])))
             {
                 printf("Error creating processing thread");
             }
@@ -124,6 +132,7 @@ void PIRServer::Process1()
         for (int i = 0; i < NUM_ROW_THREAD; i++)
         {
             pthread_join(row_process_thread[i], NULL);
+            delete process_row_structure_ptr[i];
         }
     }
 }
@@ -139,9 +148,11 @@ void PIRServer::Process2()
         pir_thread_id[i] = i;
     }
 
+    PIRServer::ProcessPIRStructure *process_pir_structure_ptr[NUM_PIR_THREAD];
     for (int i = 0; i < NUM_PIR_THREAD; i++)
     {
-        if (pthread_create(&(pir_thread[i]), NULL, process_pir, (void *)&(pir_thread_id[i])))
+        process_pir_structure_ptr[i] = new PIRServer::ProcessPIRStructure(pir_thread_id[i], this);
+        if (pthread_create(&(pir_thread[i]), NULL, process_pir, static_cast<void *>(process_pir_structure_ptr[i])))
         {
             printf("Error creating PIR processing thread");
         }
@@ -150,6 +161,7 @@ void PIRServer::Process2()
     for (int i = 0; i < NUM_PIR_THREAD; i++)
     {
         pthread_join(pir_thread[i], NULL);
+        delete process_pir_structure_ptr[i];
     }
     for (int i = 1; i < NUM_PIR_THREAD; i++)
     {
@@ -282,156 +294,176 @@ void PIRServer::pir_encode_db(std::vector<std::vector<uint64_t>> db)
 
 void *PIRServer::expand_query(void *arg)
 {
-    int id = *((int *)arg);
+    PIRServer::ExpandQueryStructure *args_ptr = static_cast<PIRServer::ExpandQueryStructure *>(arg);
+    int id = args_ptr->id;
+    PIRServer *server = args_ptr->server;
 
-    expanded_query[id] = server_query_ct;
-    my_multiply_plain_ntt(*context, expanded_query[id], masks[id], NUM_EXPANSION_THREAD);
-    my_transform_from_ntt_inplace(*context, expanded_query[id], NUM_EXPANSION_THREAD);
+    server->expanded_query[id] = server->server_query_ct;
+    my_multiply_plain_ntt(*(server->context), server->expanded_query[id], server->masks[id], server->NUM_EXPANSION_THREAD);
+    my_transform_from_ntt_inplace(*(server->context), server->expanded_query[id], server->NUM_EXPANSION_THREAD);
     Ciphertext temp_ct;
 
-    for (int i = N / (2 * NUM_COL); i < N / 2; i *= 2)
+    for (int i = N / (2 * server->NUM_COL); i < N / 2; i *= 2)
     {
-        temp_ct = expanded_query[id];
-        my_rotate_internal(*context, temp_ct, i, galois_keys, column_pools[id], NUM_EXPANSION_THREAD);
-        my_add_inplace(*context, expanded_query[id], temp_ct);
+        temp_ct = server->expanded_query[id];
+        my_rotate_internal(*(server->context), temp_ct, i, server->galois_keys, server->column_pools[id], server->NUM_EXPANSION_THREAD);
+        my_add_inplace(*(server->context), server->expanded_query[id], temp_ct);
     }
     return nullptr;
 }
 
 void *PIRServer::process_rows(void *arg)
 {
-    int id = *((int *)arg); // row thread ID
-    Ciphertext column_results[NUM_COL];
+    PIRServer::ProcessRowStructure *args_ptr = static_cast<PIRServer::ProcessRowStructure *>(arg);
+    int id = args_ptr->id; // row thread ID
+    PIRServer *server = args_ptr->server;
+
+    Ciphertext column_results[server->NUM_COL];
     vector<column_thread_arg> column_args;
     vector<mult_thread_arg> mult_args;
 
-    for (int i = 0; i < NUM_COL_THREAD; i++)
+    for (int i = 0; i < server->NUM_COL_THREAD; i++)
     {
         column_args.push_back(column_thread_arg(i, id, column_results));
     }
-    for (int i = 0; i < NUM_COL; i++)
+    for (int i = 0; i < server->NUM_COL; i++)
     {
         mult_args.push_back(mult_thread_arg(i, 1, column_results));
     }
-    int num_row_per_thread = NUM_ROW / NUM_ROW_THREAD;
+    int num_row_per_thread = server->NUM_ROW / server->NUM_ROW_THREAD;
     int start_idx = num_row_per_thread * id;
     int end_idx = start_idx + num_row_per_thread;
 
-    pthread_t col_process_thread[NUM_COL_THREAD];
-    pthread_t col_mult_thread[NUM_COL_THREAD];
+    pthread_t col_process_thread[server->NUM_COL_THREAD];
+    pthread_t col_mult_thread[server->NUM_COL_THREAD];
 
+    PIRServer::ProcessColStructure *process_col_structure_ptr[server->NUM_COL_THREAD];
     for (int row_idx = start_idx; row_idx < end_idx; row_idx++)
     {
         // time_start = chrono::high_resolution_clock::now();
 
-        for (int i = 0; i < NUM_COL_THREAD; i++)
+        for (int i = 0; i < server->NUM_COL_THREAD; i++)
         {
             column_args[i].row_idx = row_idx;
-            if (pthread_create(&(col_process_thread[i]), NULL, process_columns, (void *)&(column_args[i])))
+            process_col_structure_ptr[i] = new PIRServer::ProcessColStructure(column_args[i], server);
+            if (pthread_create(&(col_process_thread[i]), NULL, process_columns, static_cast<void *>(process_col_structure_ptr[i])))
             {
                 printf("Error creating column processing thread");
             }
         }
 
-        for (int i = 0; i < NUM_COL_THREAD; i++)
+        for (int i = 0; i < server->NUM_COL_THREAD; i++)
         {
             pthread_join(col_process_thread[i], NULL);
+            delete process_col_structure_ptr[i];
         }
 
-        for (int diff = 2; diff <= NUM_COL; diff *= 2)
+        PIRServer::MultiplyColStructure *mul_col_structure_ptr[server->NUM_COL];
+        for (int diff = 2; diff <= server->NUM_COL; diff *= 2)
         {
 
             for (int i = 0; i < mult_args.size(); i++)
             {
                 mult_args[i].diff = diff;
             }
-            for (int i = 0; i < NUM_COL; i += diff)
+            for (int i = 0; i < server->NUM_COL; i += diff)
             {
-                if (pthread_create(&(col_mult_thread[i]), NULL, multiply_columns, (void *)&(mult_args[i])))
+                mul_col_structure_ptr[i] = new PIRServer::MultiplyColStructure(mult_args[i], server);
+                if (pthread_create(&(col_mult_thread[i]), NULL, multiply_columns, static_cast<void *>(mul_col_structure_ptr[i])))
                 {
                     printf("Error creating column processing thread");
                 }
             }
 
-            for (int i = 0; i < NUM_COL; i += diff)
+            for (int i = 0; i < server->NUM_COL; i += diff)
             {
                 pthread_join(col_mult_thread[i], NULL);
+                delete mul_col_structure_ptr[i];
             }
         }
 
         Ciphertext temp_ct = column_results[0];
-        my_conjugate_internal(*context, temp_ct, galois_keys, column_pools[0], TOTAL_MACHINE_THREAD / NUM_ROW_THREAD);
+        my_conjugate_internal(*(server->context), temp_ct, server->galois_keys, server->column_pools[0], server->TOTAL_MACHINE_THREAD / server->NUM_ROW_THREAD);
 
-        my_bfv_multiply(*context, column_results[0], temp_ct, column_pools[0], TOTAL_MACHINE_THREAD / NUM_ROW_THREAD);
-        my_relinearize_internal(*context, column_results[0], relin_keys, 2, MemoryManager::GetPool(), TOTAL_MACHINE_THREAD / NUM_ROW_THREAD);
-        my_transform_to_ntt_inplace(*context, column_results[0], TOTAL_MACHINE_THREAD);
-        row_result[row_idx] = column_results[0];
+        my_bfv_multiply(*(server->context), column_results[0], temp_ct, server->column_pools[0], server->TOTAL_MACHINE_THREAD / server->NUM_ROW_THREAD);
+        my_relinearize_internal(*(server->context), column_results[0], server->relin_keys, 2, MemoryManager::GetPool(), server->TOTAL_MACHINE_THREAD / server->NUM_ROW_THREAD);
+        my_transform_to_ntt_inplace(*(server->context), column_results[0], server->TOTAL_MACHINE_THREAD);
+        server->row_result[row_idx] = column_results[0];
     }
     return nullptr;
 }
 
 void *PIRServer::process_columns(void *arg)
 {
-    column_thread_arg col_arg = *((column_thread_arg *)arg);
+    PIRServer::ProcessColStructure *args_ptr = static_cast<PIRServer::ProcessColStructure *>(arg);
+    column_thread_arg col_arg = args_ptr->col_arg;
+    PIRServer *server = args_ptr->server;
+
     vector<unsigned long> exp_time;
     unsigned long exponent_time = 0;
-    int num_col_per_thread = NUM_COL / NUM_COL_THREAD;
+    int num_col_per_thread = server->NUM_COL / server->NUM_COL_THREAD;
     int start_idx = num_col_per_thread * col_arg.col_id;
     int end_idx = start_idx + num_col_per_thread;
     for (int i = start_idx; i < end_idx; i++)
     {
         Ciphertext sub;
         Ciphertext prod;
-        evaluator->sub_plain(expanded_query[i], db[col_arg.row_idx][i], sub);
+        server->evaluator->sub_plain(server->expanded_query[i], server->db[col_arg.row_idx][i], sub);
 
         for (int k = 0; k < 16; k++)
         {
-            my_bfv_square(*context, sub, column_pools[i], NUM_EXPONENT_THREAD);
-            my_relinearize_internal(*context, sub, relin_keys, 2, column_pools[i], NUM_EXPONENT_THREAD);
+            my_bfv_square(*(server->context), sub, server->column_pools[i], server->NUM_EXPONENT_THREAD);
+            my_relinearize_internal(*(server->context), sub, server->relin_keys, 2, server->column_pools[i], server->NUM_EXPONENT_THREAD);
         }
         for (int k = 0; k < MOD_SWITCH_COUNT; k++)
         {
-            my_mod_switch_scale_to_next(*context, sub, sub, column_pools[i], NUM_EXPONENT_THREAD);
+            my_mod_switch_scale_to_next(*(server->context), sub, sub, server->column_pools[i], server->NUM_EXPONENT_THREAD);
         }
-        evaluator->sub(*one_ct, sub, (col_arg.column_result)[i]);
+        server->evaluator->sub(server->one_ct, sub, (col_arg.column_result)[i]);
     }
     return nullptr;
 }
 
 void *PIRServer::multiply_columns(void *arg)
 {
-    mult_thread_arg mult_arg = *((mult_thread_arg *)arg);
+    PIRServer::MultiplyColStructure *args_ptr = static_cast<PIRServer::MultiplyColStructure *>(arg);
+    mult_thread_arg mult_arg = args_ptr->mult_arg;
+    PIRServer *server = args_ptr->server;
+
     Ciphertext *column_results = mult_arg.column_result;
     int id = mult_arg.id;
     int diff = mult_arg.diff;
-    int num_threads = TOTAL_MACHINE_THREAD / (NUM_COL / diff);
+    int num_threads = server->TOTAL_MACHINE_THREAD / (server->NUM_COL / diff);
 
-    my_bfv_multiply(*context, column_results[id], column_results[id + (diff / 2)], column_pools[id], num_threads);
-    my_relinearize_internal(*context, column_results[id], relin_keys, 2, column_pools[id], num_threads);
+    my_bfv_multiply(*(server->context), column_results[id], column_results[id + (diff / 2)], server->column_pools[id], num_threads);
+    my_relinearize_internal(*(server->context), column_results[id], server->relin_keys, 2, server->column_pools[id], num_threads);
     return nullptr;
 }
 
 void *PIRServer::process_pir(void *arg)
 {
-    int my_id = *((int *)arg);
-    int column_per_thread = (pir_num_columns_per_obj / 2) / NUM_PIR_THREAD;
+    PIRServer::ProcessPIRStructure *args_ptr = static_cast<PIRServer::ProcessPIRStructure *>(arg);
+    int my_id = args_ptr->my_id;
+    PIRServer *server = args_ptr->server;
+
+    int column_per_thread = (server->pir_num_columns_per_obj / 2) / server->NUM_PIR_THREAD;
     int start_idx = my_id * column_per_thread;
     int end_idx = start_idx + column_per_thread - 1;
-    pir_results[my_id] = get_sum(row_result, start_idx, end_idx);
+    server->pir_results[my_id] = get_sum(server->row_result, start_idx, end_idx, server);
 
     int mask = 1;
     while (mask <= start_idx)
     {
         if (start_idx & mask)
         {
-            my_rotate_internal(*context, pir_results[my_id], -mask, galois_keys, MemoryManager::GetPool(), TOTAL_MACHINE_THREAD / NUM_PIR_THREAD);
+            my_rotate_internal(*(server->context), server->pir_results[my_id], -mask, server->galois_keys, MemoryManager::GetPool(), server->TOTAL_MACHINE_THREAD / server->NUM_PIR_THREAD);
         }
         mask <<= 1;
     }
     return nullptr;
 }
 
-Ciphertext PIRServer::get_sum(vector<Ciphertext> &query, uint32_t start, uint32_t end)
+Ciphertext PIRServer::get_sum(vector<Ciphertext> &query, uint32_t start, uint32_t end, PIRServer *server)
 {
     seal::Ciphertext result;
 
@@ -440,10 +472,10 @@ Ciphertext PIRServer::get_sum(vector<Ciphertext> &query, uint32_t start, uint32_
         int count = (end - start) + 1;
         int next_power_of_two = get_next_power_of_two(count);
         int mid = next_power_of_two / 2;
-        seal::Ciphertext left_sum = get_sum(query, start, start + mid - 1);
-        seal::Ciphertext right_sum = get_sum(query, start + mid, end);
-        my_rotate_internal(*context, right_sum, -mid, galois_keys, column_pools[0], TOTAL_MACHINE_THREAD / NUM_PIR_THREAD);
-        my_add_inplace(*context, left_sum, right_sum);
+        seal::Ciphertext left_sum = get_sum(query, start, start + mid - 1, server);
+        seal::Ciphertext right_sum = get_sum(query, start + mid, end, server);
+        my_rotate_internal(*server->context, right_sum, -mid, server->galois_keys, server->column_pools[0], server->TOTAL_MACHINE_THREAD / server->NUM_PIR_THREAD);
+        my_add_inplace(*server->context, left_sum, right_sum);
         return left_sum;
     }
     else
@@ -451,15 +483,15 @@ Ciphertext PIRServer::get_sum(vector<Ciphertext> &query, uint32_t start, uint32_
 
         seal::Ciphertext column_sum = query[0];
         seal::Ciphertext temp_ct;
-        my_multiply_plain_ntt(*context, column_sum, pir_encoded_db[pir_num_query_ciphertext * start], TOTAL_MACHINE_THREAD / NUM_PIR_THREAD);
+        my_multiply_plain_ntt(*server->context, column_sum, server->pir_encoded_db[server->pir_num_query_ciphertext * start], server->TOTAL_MACHINE_THREAD / server->NUM_PIR_THREAD);
 
-        for (int j = 1; j < pir_num_query_ciphertext; j++)
+        for (int j = 1; j < server->pir_num_query_ciphertext; j++)
         {
             temp_ct = query[j];
-            my_multiply_plain_ntt(*context, temp_ct, pir_encoded_db[pir_num_query_ciphertext * start + j], TOTAL_MACHINE_THREAD / NUM_PIR_THREAD);
-            my_add_inplace(*context, column_sum, temp_ct);
+            my_multiply_plain_ntt(*server->context, temp_ct, server->pir_encoded_db[server->pir_num_query_ciphertext * start + j], server->TOTAL_MACHINE_THREAD / server->NUM_PIR_THREAD);
+            my_add_inplace(*server->context, column_sum, temp_ct);
         }
-        my_transform_from_ntt_inplace(*context, column_sum, TOTAL_MACHINE_THREAD / NUM_PIR_THREAD);
+        my_transform_from_ntt_inplace(*server->context, column_sum, server->TOTAL_MACHINE_THREAD / server->NUM_PIR_THREAD);
         return column_sum;
     }
 }

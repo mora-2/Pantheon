@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.10)
 
 project(main VERSION 1.0 LANGUAGES CXX)
 
-set(CMAKE_C_COMPILER gcc)
-set(CMAKE_CXX_COMPILER g++)
+# set(CMAKE_C_COMPILER gcc)
+# set(CMAKE_CXX_COMPILER g++)
 set(CMAKE_CXX_STANDARD 17)
 
 include(CheckCXXCompilerFlag)
@@ -27,7 +27,8 @@ add_executable(main main.cpp)
 set_target_properties(main PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 
 target_include_directories(main PUBLIC /home/yuance/Work/Encryption/PIR/code/PIR/Pantheon/pir)
-target_link_directories(main PUBLIC /home/yuance/Work/Encryption/PIR/code/PIR/Pantheon/pir/lib)
+add_subdirectory(/home/yuance/Work/Encryption/PIR/code/PIR/Pantheon/pir pir)
+# target_link_directories(main PUBLIC /home/yuance/Work/Encryption/PIR/code/PIR/Pantheon/pir/lib)
 target_link_libraries(main PUBLIC Pantheon)
 
 find_package(SEAL 0.0.0 EXACT REQUIRED)

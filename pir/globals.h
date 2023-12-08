@@ -1,9 +1,10 @@
+#pragma once
 #include <vector>
 #include <chrono>
 #include<iostream>
 #include "seal/seal.h"
 
-#include "utils.hpp"
+#include "utils.h"
 
 using namespace std::chrono;
 using namespace std;
@@ -18,7 +19,7 @@ using namespace seal;
 
 #define PLAIN_BIT 16
 #define PLAIN_MODULUS 65537
-vector<int> CT_PRIMES({60,60,60,60,60,60,60,60,60,60,60,60,60});
 
 #define LARGE_COEFF_COUNT (((CT_PRIMES.size() - 1) * (N) * 2))
 #define SMALL_COEFF_COUNT (((CT_PRIMES.size() - 1 - MOD_SWITCH_COUNT) * (N) * 2))
+extern vector<int> CT_PRIMES;

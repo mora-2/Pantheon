@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include "seal/seal.h"
+#include "config.h"
 
 using namespace seal;
 using namespace std;
@@ -12,61 +13,92 @@ public:
     uint64_t number_of_items;
     uint32_t key_size; // in bits
     uint32_t obj_size;
-    static int NUM_ROW;
-    static int NUM_COL;
+    int NUM_ROW;
+    int NUM_COL;
 
-    static vector<vector<Plaintext>> db;
+    vector<vector<Plaintext>> db;
     seal::parms_id_type compact_pid; // for one ctx used in db encode
 
     /* PIR params */
     uint32_t pir_num_obj;
     uint32_t pir_obj_size;
     uint32_t pir_key_size; //  in bits
-    static uint32_t pir_num_query_ciphertext;
-    static uint32_t pir_num_columns_per_obj;
+    uint32_t pir_num_query_ciphertext;
+    uint32_t pir_num_columns_per_obj;
     uint32_t pir_plain_bit_count;
     uint32_t pir_db_rows;
 
     /* Setup DB */
     vector<vector<uint64_t>> pir_db; // 64 bit placeholder for 16 bit plaintext coefficients
-    static vector<Plaintext> pir_encoded_db;
+    vector<Plaintext> pir_encoded_db;
 
     /* Crypto params */
     std::unique_ptr<EncryptionParameters> parms;
     std::stringstream parms_ss;
-    static std::unique_ptr<SEALContext> context;
-    static GaloisKeys galois_keys;
-    static RelinKeys relin_keys;
-    static std::unique_ptr<Evaluator> evaluator;
+    std::unique_ptr<SEALContext> context;
+    GaloisKeys galois_keys;
+    RelinKeys relin_keys;
+    std::unique_ptr<Evaluator> evaluator;
     std::unique_ptr<BatchEncoder> batch_encoder;
 
     /* Memory pool */
-    static vector<MemoryPoolHandle> column_pools;
+    vector<MemoryPoolHandle> column_pools;
 
     /* OneCiphertext */
-    static std::shared_ptr<Ciphertext> one_ct; // receive from client
+    Ciphertext one_ct; // receive from client
 
     /* QueryExpand */
-    static vector<Plaintext> masks;
-    static Ciphertext server_query_ct;
-    static vector<Ciphertext> expanded_query;
+    vector<Plaintext> masks;
+    Ciphertext server_query_ct;
+    vector<Ciphertext> expanded_query;
 
     /* Process1 */
-    static vector<Ciphertext> row_result;
+    vector<Ciphertext> row_result;
 
     /* Process2 */
-    static vector<Ciphertext> pir_results;
+    vector<Ciphertext> pir_results;
 
     /* datastream */
     std::stringstream ss;
 
 private:
-    static int NUM_COL_THREAD; // sub thread
-    static int NUM_ROW_THREAD; // main thread
-    static int NUM_PIR_THREAD;
-    static int TOTAL_MACHINE_THREAD;
-    static int NUM_EXPANSION_THREAD;
-    static int NUM_EXPONENT_THREAD;
+    int NUM_COL_THREAD; // sub thread
+    int NUM_ROW_THREAD; // main thread
+    int NUM_PIR_THREAD;
+    int TOTAL_MACHINE_THREAD;
+    int NUM_EXPANSION_THREAD;
+    int NUM_EXPONENT_THREAD;
+
+    struct ExpandQueryStructure
+    {
+        int id;
+        PIRServer *server;
+        ExpandQueryStructure(int id, PIRServer *server) : id(id), server(server) {}
+    };
+    struct ProcessRowStructure
+    {
+        int id;
+        PIRServer *server;
+        ProcessRowStructure(int id, PIRServer *server) : id(id), server(server) {}
+    };
+    struct ProcessColStructure
+    {
+        column_thread_arg col_arg;
+        PIRServer *server;
+        ProcessColStructure(column_thread_arg col_arg, PIRServer *server) : col_arg(col_arg), server(server) {}
+    };
+    struct MultiplyColStructure
+    {
+        mult_thread_arg mult_arg;
+        PIRServer *server;
+        MultiplyColStructure(mult_thread_arg mult_arg, PIRServer *server) : mult_arg(mult_arg), server(server) {}
+    };
+    struct ProcessPIRStructure
+    {
+        int my_id;
+        PIRServer *server;
+        ProcessPIRStructure(int my_id, PIRServer *server) : my_id(my_id), server(server) {}
+    };
 
 public:
     PIRServer(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size);
@@ -91,7 +123,7 @@ public:
     void Process2();
     //-----------> send ss
 
-    ~PIRServer();
+    ~PIRServer() = default;
 
 private:
     void SetupDBParams(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size);
@@ -107,7 +139,7 @@ private:
     static void *process_columns(void *arg);
     static void *multiply_columns(void *arg);
     static void *process_pir(void *arg);
-    static Ciphertext get_sum(vector<Ciphertext> &query, uint32_t start, uint32_t end);
+    static Ciphertext get_sum(vector<Ciphertext> &query, uint32_t start, uint32_t end, PIRServer *server);
     static uint32_t get_next_power_of_two(uint32_t number);
     static uint32_t get_number_of_bits(uint64_t number);
 };

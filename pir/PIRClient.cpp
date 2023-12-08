@@ -2,7 +2,7 @@
 #include "globals.h"
 #include <set>
 #include <openssl/sha.h>
-#include "utils.hpp"
+#include "utils.h"
 
 PIRClient::PIRClient(uint32_t key_size, uint32_t obj_size)
 {
