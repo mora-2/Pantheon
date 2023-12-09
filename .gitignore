@@ -412,3 +412,13 @@ MigrationBackup/
 .vscode/settings.json
 .vscode/tasks.json
 .vscode/c_cpp_properties.json
+http/gRPC/client/build/client
+http/gRPC/client/build/pantheon_pir.grpc.pb.cc
+http/gRPC/client/build/pantheon_pir.grpc.pb.h
+http/gRPC/client/build/pantheon_pir.pb.cc
+http/gRPC/client/build/pantheon_pir.pb.h
+http/gRPC/server/build/pantheon_pir.grpc.pb.cc
+http/gRPC/server/build/pantheon_pir.grpc.pb.h
+http/gRPC/server/build/pantheon_pir.pb.cc
+http/gRPC/server/build/pantheon_pir.pb.h
+http/gRPC/server/build/server

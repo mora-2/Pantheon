@@ -2,7 +2,6 @@
 #include "PIRServer.h"
 #include "PIRClient.h"
 #include "globals.h"
-
 using namespace std;
 
 int main(int argc, char *argv[])
@@ -35,7 +34,7 @@ int main(int argc, char *argv[])
     /*-----------------------------------------------------------------*/
     /*                           QueryMake                             */
     /*-----------------------------------------------------------------*/
-    int desired_index = 100;
+    int desired_index = 0;
     client.QueryMake(desired_index);
 
     /*-----------------------------------------------------------------*/
