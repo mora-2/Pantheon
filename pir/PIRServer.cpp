@@ -41,15 +41,22 @@ void PIRServer::RecOneCiphertext(std::stringstream &one_ct_ss)
     this->compact_pid = one_ct.parms_id();
 }
 
-void PIRServer::SetupDB()
+void PIRServer::SetupDB(vector<string>& keydb,vector<string>& elems)
 {
-    populate_db();
+    populate_db(keydb);
     for (int i = 0; i < pir_num_obj; i++)
     {
         vector<uint64_t> v;
         for (int j = 0; j < (pir_obj_size / 2); j++)
         { // 2 bytes each plaintxt slot
-            v.push_back(rand() % PLAIN_MODULUS);
+            uint64_t tem=0;
+            if(i<elems.size()&&2*j<elems[i].size()){
+                tem=static_cast<int>(elems[i][2*j]);
+                if((2*j+1)<elems[i].size()){
+                    tem=256*tem+static_cast<int>(elems[i][2*j+1]);
+                }
+            }
+            v.push_back(tem);
         }
         pir_db.push_back(v);
     }
@@ -193,8 +200,8 @@ void PIRServer::SetupThreadParams()
 {
     this->NUM_COL_THREAD = NUM_COL;
     this->NUM_ROW_THREAD = 1;
-    this->NUM_PIR_THREAD = 32;
-    this->TOTAL_MACHINE_THREAD = 32;
+    this->NUM_PIR_THREAD = 4;
+    this->TOTAL_MACHINE_THREAD = 6;
     this->NUM_EXPANSION_THREAD = TOTAL_MACHINE_THREAD / NUM_COL_THREAD;
     this->NUM_EXPONENT_THREAD = TOTAL_MACHINE_THREAD / (NUM_COL_THREAD * NUM_ROW_THREAD);
 }
@@ -209,7 +216,7 @@ void PIRServer::SetupPIRParams()
     this->pir_db_rows = ceil(this->pir_num_obj / (double)N) * this->pir_num_columns_per_obj;
 }
 
-void PIRServer::populate_db()
+void PIRServer::populate_db(vector<string>& keydb)
 {
     vector<vector<uint64_t>> mat_db;
     for (int i = 0; i < NUM_ROW * NUM_COL; i++)
@@ -222,9 +229,19 @@ void PIRServer::populate_db()
     for (uint32_t row = 0; row < NUM_ROW * (N / 2); row++)
     {
         uint32_t row_in_vector = row % (N / 2);
-        uint32_t val = row + 1;
-        const char str[] = {val & 0xFF, (val >> 8) & 0xFF, (val >> 16) & 0xFF, (val >> 24) & 0xFF, 0};
-        sha256(str, 4, hash);
+        int j=0;
+        string key;
+        char str[NUM_COL*4];
+        if(row<keydb.size()){
+            key = keydb[row];
+            for(j;j<key.size();j++){
+                str[j]=key[j];
+            }
+        }
+        for(j;j<4*NUM_COL;j++){
+            str[j]=0;
+        }
+        sha256(str, 4*NUM_COL, hash);
         for (int col = 0; col < NUM_COL; col++)
         {
             int vector_idx = (row / (N / 2)) * NUM_COL + col;

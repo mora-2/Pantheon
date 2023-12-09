@@ -31,6 +31,7 @@ public:
 
     /* query */
     int desired_index;
+    string desired_key;
     std::stringstream qss;
 
     /* Reconstruct */
@@ -48,11 +49,13 @@ public:
     //-----------> send one_ct_ss
 
     /* QueryMake */
-    void QueryMake(int desired_index); // save to qss
+    void QueryMake(string& desired_key); // save to qss
     //-----------> send qss
 
     /* Reconstruct */
-    vector<uint64_t> Reconstruct(std::stringstream &ss);
+    void Reconstruct(std::stringstream &ss);
+
+    void showresult();
 
     ~PIRClient() = default;
 

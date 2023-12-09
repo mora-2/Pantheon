@@ -26,9 +26,9 @@ add_executable(main main.cpp)
 
 set_target_properties(main PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 
-target_include_directories(main PUBLIC /home/yuance/Work/Encryption/PIR/code/PIR/Pantheon/pir)
-add_subdirectory(/home/yuance/Work/Encryption/PIR/code/PIR/Pantheon/pir pir)
-# target_link_directories(main PUBLIC /home/yuance/Work/Encryption/PIR/code/PIR/Pantheon/pir/lib)
+target_include_directories(main PUBLIC ../pir)
+add_subdirectory(../pir pir)
+# target_link_directories(main PUBLIC ../pir/lib)
 target_link_libraries(main PUBLIC Pantheon)
 
 find_package(SEAL 0.0.0 EXACT REQUIRED)

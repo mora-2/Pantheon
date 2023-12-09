@@ -66,16 +66,20 @@ void PIRClient::SetOneCiphertext()
     one_ct.save(this->one_ct_ss);
 }
 
-void PIRClient::QueryMake(int desired_index)
+void PIRClient::QueryMake(string& desired_key)
 {
-    this->desired_index = desired_index;
+    this->desired_key = desired_key;
     vector<uint64_t> client_query_mat(N, 0ULL);
-
-    int val = desired_index + 1;
-    const char str[] = {val & 0xFF, (val >> 8) & 0xFF, (val >> 16) & 0xFF, (val >> 24) & 0xFF, 0};
-
+    char str[NUM_COL*4];
+    int j=0;
+    for(j;j<desired_key.size();j++){
+        str[j]=desired_key[j];
+    }
+    for(j;j<4*NUM_COL;j++){
+        str[j]=0;
+    }
     unsigned char hash[SHA256_DIGEST_LENGTH];
-    sha256(str, 4, hash);
+    sha256(str, 4*NUM_COL, hash);
 
     for (int i = 0; i < NUM_COL; i++)
     {
@@ -97,7 +101,7 @@ void PIRClient::QueryMake(int desired_index)
     printf("query size (Byte): %lu\n", qss.str().size());
 }
 
-vector<uint64_t> PIRClient::Reconstruct(std::stringstream &ss)
+void PIRClient::Reconstruct(std::stringstream &ss)
 {
     Ciphertext final_result;
     final_result.load(*context, ss);
@@ -106,10 +110,46 @@ vector<uint64_t> PIRClient::Reconstruct(std::stringstream &ss)
 
     decryptor->decrypt(final_result, result_pt);
     batch_encoder->decode(result_pt, result_mat);
+}
 
-    vector<uint64_t> decoded_response;
-    decoded_response = rotate_plain(result_mat, desired_index % row_size);
-    return decoded_response;
+void PIRClient::showresult()
+{
+    string res;
+    if(result_mat[result_mat.size()-1]!=0&&result_mat[0]!=0){
+        int i=0;
+        for(i;i<row_size;i++){
+            if(result_mat[i]==0)break;
+        }
+        int j=i;
+        int k=0;
+        for(i;i<result_mat.size()+j;i++){
+            if(result_mat[i]!=0){
+                if(result_mat[i] <256){
+                    res=res+static_cast<char>(result_mat[i]);
+                    break;
+                }
+                res=res+static_cast<char>(result_mat[i]/256);
+                res=res+static_cast<char>(result_mat[i]%256);
+                k++;
+            }
+        }
+    }
+    else{
+        int k=0;
+        for(int i=0;i<result_mat.size();i++){
+            if(result_mat[i]!=0){
+                if(result_mat[i] <256){
+                    res=res+static_cast<char>(result_mat[i]);
+                    break;
+                }
+                res=res+static_cast<char>(result_mat[i]/256);
+                res=res+static_cast<char>(result_mat[i]%256);
+                k++;
+            }
+        }
+    }
+    cout<<res<<endl;
+    cout<<res.size()<<endl;
 }
 
 void PIRClient::SetupDBParams(uint32_t key_size, uint32_t obj_size)

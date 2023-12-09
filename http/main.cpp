@@ -9,8 +9,11 @@ int main(int argc, char *argv[])
 {
     uint64_t number_of_items = 10000;
     uint32_t key_size = 64;
-    uint32_t obj_size = 128;
-
+    uint32_t obj_size = 32;
+    vector<string> keydb={"cat","dog","chik","monkk"};
+    vector<std::string> elems={"cat","dog","fish","dhsncjskfnxasdjwwwww"};
+    string desired_key = "monkk";
+    int desired_index = 3;
     PIRServer server(number_of_items, key_size, obj_size);
     PIRClient client(key_size, obj_size);
 
@@ -30,13 +33,12 @@ int main(int argc, char *argv[])
     /*-----------------------------------------------------------------*/
     /*                           SetupDB                               */
     /*-----------------------------------------------------------------*/
-    server.SetupDB();
+    server.SetupDB(keydb,elems);
 
     /*-----------------------------------------------------------------*/
     /*                           QueryMake                             */
     /*-----------------------------------------------------------------*/
-    int desired_index = 100;
-    client.QueryMake(desired_index);
+    client.QueryMake(desired_key);
 
     /*-----------------------------------------------------------------*/
     /*                           QueryExpand                           */
@@ -56,31 +58,11 @@ int main(int argc, char *argv[])
     /*-----------------------------------------------------------------*/
     /*                           Reconstruct                           */
     /*-----------------------------------------------------------------*/
-    auto decoded_response = client.Reconstruct(server.ss);
+    client.Reconstruct(server.ss);
 
     /*-----------------------------------------------------------------*/
-    /*                           Validate                              */
+    /*                           showresult                            */
     /*-----------------------------------------------------------------*/
-    bool incorrect_result = false;
-    for (int i = 0; i < server.pir_obj_size / 4; i++)
-    {
-        if ((server.pir_db[desired_index][i] != decoded_response[i]) || (server.pir_db[desired_index][i + server.pir_obj_size / 4] != decoded_response[i + N / 2]))
-        {
-            incorrect_result = true;
-            break;
-        }
-    }
-
-    if (incorrect_result)
-    {
-        std::cout << "Result is incorrect!" << std::endl
-                  << std::endl;
-    }
-    else
-    {
-        std::cout << "Result is correct!" << std::endl
-                  << std::endl;
-        // print_report();
-    }
+    client.showresult();
     return 0;
 }
