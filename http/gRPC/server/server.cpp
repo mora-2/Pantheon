@@ -13,6 +13,8 @@ using namespace std;
 using grpc::Server;
 using grpc::ServerBuilder;
 using grpc::ServerContext;
+using grpc::ServerReader;
+using grpc::ServerReaderWriter;
 using grpc::Status;
 using pantheon::CryptoKeys;
 using pantheon::CryptoParams;
@@ -29,20 +31,37 @@ public:
 
     Status ReceiveParams(ServerContext *context, const Info *request, CryptoParams *response)
     {
+        std::unique_lock<std::mutex> lock(this->mu_);
         response->set_parms_ss(server->parms_ss.str());
+        std::cout << "1.ReceiveParams finished." << std::endl;
         return Status::OK;
     }
-    Status SendKeys(ServerContext *context, const CryptoKeys *request, Info *response)
+    Status SendKeys(ServerContext *context, ServerReader<CryptoKeys> *reader, Info *response)
     {
-        std::stringstream ss(request->keys_ss());
+        std::unique_lock<std::mutex> lock(this->mu_);
+        std::stringstream ss;
+        CryptoKeys keys_ss;
+
+        int i = 0;
+        while (reader->Read(&keys_ss))
+        {
+            ss << keys_ss.keys_ss();
+            std::cout << "\r"
+                      << "Receive Msgs Count: " << i++ << std::flush;
+        }
+        std::cout << std::endl;
+
         server->SetupKeys(ss);
+        std::cout << "2.SendKeys finished." << std::endl;
         return Status::OK;
     }
     Status SendOneCiphertext(ServerContext *context, const OneCiphertext *request, Info *response)
     {
+        std::unique_lock<std::mutex> lock(this->mu_);
         std::stringstream ss(request->one_ct_ss());
         server->RecOneCiphertext(ss);
         server->SetupDB(); // compact_pid
+        std::cout << "3.SendOneCiphertext finished." << std::endl;
         return Status::OK;
     }
     Status Query(ServerContext *context, const QueryStream *request, ResponseStream *response)
@@ -54,6 +73,7 @@ public:
         server->Process2();
 
         response->set_ss(server->ss.str());
+        std::cout << "4.Query finished." << std::endl;
         return Status::OK;
     }
 
@@ -65,7 +85,7 @@ private:
 void RunServer()
 {
     /* init PIRServer */
-    uint64_t number_of_items = 10000;
+    uint64_t number_of_items = 1000;
     uint32_t key_size = 64;
     uint32_t obj_size = 128;
     PIRServer server(number_of_items, key_size, obj_size);

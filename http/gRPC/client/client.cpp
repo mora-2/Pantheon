@@ -12,6 +12,8 @@
 using namespace std;
 using grpc::Channel;
 using grpc::ClientContext;
+using grpc::ClientReaderWriter;
+using grpc::ClientWriter;
 using grpc::Status;
 using pantheon::CryptoKeys;
 using pantheon::CryptoParams;
@@ -58,10 +60,24 @@ public:
     void SendKeys(std::stringstream &keys_ss)
     {
         CryptoKeys request;
-        request.set_keys_ss(keys_ss.str());
+        // request.set_keys_ss(keys_ss.str());
         Info reply;
         ClientContext context;
-        Status status = stub_->SendKeys(&context, request, &reply);
+
+        std::unique_ptr<ClientWriter<CryptoKeys>> writer(stub_->SendKeys(&context, &reply));
+
+        for (size_t i = 0; i < keys_ss.str().size(); i += GRPC_DEFAULT_MAX_RECV_MESSAGE_LENGTH - 100)
+        {
+            request.set_keys_ss(keys_ss.str().substr(i, GRPC_DEFAULT_MAX_RECV_MESSAGE_LENGTH - 100));
+            if (!writer->Write(request))
+            {
+                // Broken stream.
+                break;
+            }
+        }
+        writer->WritesDone();
+
+        Status status = writer->Finish();
         if (status.ok())
         {
             // return reply.message();
@@ -157,7 +173,6 @@ int main(int argc, char *argv[])
     /*                           Reconstruct                           */
     /*-----------------------------------------------------------------*/
     auto decoded_response = client.Reconstruct(rpc_client.answer_ss);
-
 
     return 0;
 }

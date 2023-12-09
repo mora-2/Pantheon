@@ -16,7 +16,7 @@ package pantheon;
 
 service PantheonInterface {
   rpc ReceiveParams(Info) returns (CryptoParams) {}
-  rpc SendKeys(CryptoKeys) returns (Info) {}
+  rpc SendKeys(stream CryptoKeys) returns (Info) {}
   rpc SendOneCiphertext(OneCiphertext) returns (Info) {}
   rpc Query(QueryStream) returns (ResponseStream) {}
 }
