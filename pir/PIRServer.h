@@ -112,6 +112,7 @@ public:
 
     /* Setup DB */
     void SetupDB();
+    void SetupDB(vector<string> &keydb, vector<string> &elems);
 
     /* QueryExpand */
     void QueryExpand(std::stringstream &qss);
@@ -131,6 +132,7 @@ private:
     void SetupThreadParams();
     void SetupPIRParams();
     void populate_db();
+    void populate_db(vector<string>& keydb);
     void sha256(const char *str, int len, unsigned char *dest);
     void set_pir_db(std::vector<std::vector<uint64_t>> db);
     void pir_encode_db(std::vector<std::vector<uint64_t>> db);

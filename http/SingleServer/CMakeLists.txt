@@ -7,6 +7,6 @@ add_executable(main main.cpp)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 
-target_include_directories(main PUBLIC /home/yuance/Work/Encryption/PIR/code/PIR/Pantheon/pir)
-add_subdirectory(/home/yuance/Work/Encryption/PIR/code/PIR/Pantheon/pir pir)
+target_include_directories(main PUBLIC ${CMAKE_SOURCE_DIR}/../pir)
+add_subdirectory(${CMAKE_SOURCE_DIR}/../pir pir)
 target_link_libraries(main PUBLIC Pantheon)

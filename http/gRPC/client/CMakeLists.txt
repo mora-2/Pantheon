@@ -53,8 +53,8 @@ target_link_libraries(pir_grpc_proto
   ${_GRPC_GRPCPP}
   ${_PROTOBUF_LIBPROTOBUF})
 
-include_directories("/home/yuance/Work/Encryption/PIR/code/PIR/Pantheon/pir")
-add_subdirectory(/home/yuance/Work/Encryption/PIR/code/PIR/Pantheon/pir Pantheon)
+include_directories("${CMAKE_SOURCE_DIR}/../../../pir")
+add_subdirectory(${CMAKE_SOURCE_DIR}/../../../pir Pantheon)
 
 add_executable(${_target} ${_target}.cpp)
 target_link_libraries(${_target}

@@ -6,13 +6,14 @@
 #include "config.h"
 #include "utils.h"
 #include <cassert>
+#include <fstream>
 
 PIRServer::PIRServer(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size)
 {
     this->SetupDBParams(number_of_items, key_size, obj_size);
     this->SetupMemPool();
-    this->SetupThreadParams();
     this->SetupPIRParams();
+    this->SetupThreadParams();
 }
 void PIRServer::SetupCryptoParams()
 {
@@ -51,6 +52,32 @@ void PIRServer::SetupDB()
         for (int j = 0; j < (pir_obj_size / 2); j++)
         { // 2 bytes each plaintxt slot
             v.push_back(rand() % PLAIN_MODULUS);
+        }
+        pir_db.push_back(v);
+    }
+
+    set_pir_db(pir_db);
+    // cout << "DB population complete!" << endl;
+}
+
+void PIRServer::SetupDB(vector<string> &keydb, vector<string> &elems)
+{
+    populate_db(keydb);
+    for (int i = 0; i < pir_num_obj; i++)
+    {
+        vector<uint64_t> v;
+        for (int j = 0; j < (pir_obj_size / 2); j++)
+        { // 2 bytes each plaintxt slot
+            uint64_t tem = 0;
+            if (i < elems.size() && 2 * j < elems[i].size())
+            {
+                tem = static_cast<int>(elems[i][2 * j]);
+                if ((2 * j + 1) < elems[i].size())
+                {
+                    tem = 256 * tem + static_cast<int>(elems[i][2 * j + 1]);
+                }
+            }
+            v.push_back(tem);
         }
         pir_db.push_back(v);
     }
@@ -194,7 +221,8 @@ void PIRServer::SetupThreadParams()
 {
     this->NUM_COL_THREAD = NUM_COL;
     this->NUM_ROW_THREAD = 1;
-    this->NUM_PIR_THREAD = 32;
+    int log_tmp = floor(log2(this->pir_num_columns_per_obj / 2));
+    this->NUM_PIR_THREAD = (pow(2, log_tmp) < 32) ? pow(2, log_tmp) : 32;
     this->TOTAL_MACHINE_THREAD = 32;
     this->NUM_EXPANSION_THREAD = TOTAL_MACHINE_THREAD / NUM_COL_THREAD;
     this->NUM_EXPONENT_THREAD = TOTAL_MACHINE_THREAD / (NUM_COL_THREAD * NUM_ROW_THREAD);
@@ -236,6 +264,56 @@ void PIRServer::populate_db()
         }
     }
 
+    for (int i = 0; i < NUM_ROW; i++)
+    {
+        vector<Plaintext> row_partition;
+        for (int j = 0; j < NUM_COL; j++)
+        {
+            Plaintext pt;
+            batch_encoder->encode(mat_db[i * NUM_COL + j], pt);
+            row_partition.push_back(pt);
+        }
+        db.push_back(row_partition);
+    }
+    return;
+}
+
+void PIRServer::populate_db(vector<string> &keydb)
+{
+    vector<vector<uint64_t>> mat_db;
+    for (int i = 0; i < NUM_ROW * NUM_COL; i++)
+
+    {
+        vector<uint64_t> v(N, 0ULL);
+        mat_db.push_back(v);
+    }
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    for (uint32_t row = 0; row < NUM_ROW * (N / 2); row++)
+    {
+        uint32_t row_in_vector = row % (N / 2);
+        int j = 0;
+        string key;
+        char str[NUM_COL * 4];
+        if (row < keydb.size())
+        {
+            key = keydb[row];
+            for (j; j < key.size(); j++)
+            {
+                str[j] = key[j];
+            }
+        }
+        for (j; j < 4 * NUM_COL; j++)
+        {
+            str[j] = 0;
+        }
+        sha256(str, 4 * NUM_COL, hash);
+        for (int col = 0; col < NUM_COL; col++)
+        {
+            int vector_idx = (row / (N / 2)) * NUM_COL + col;
+            mat_db[vector_idx][row_in_vector] = (uint64_t(hash[4 * col]) << 8) + hash[4 * col + 1];
+            mat_db[vector_idx][row_in_vector + (N / 2)] = (uint64_t(hash[4 * col + 2]) << 8) + hash[4 * col + 3];
+        }
+    }
     for (int i = 0; i < NUM_ROW; i++)
     {
         vector<Plaintext> row_partition;
@@ -329,7 +407,7 @@ void *PIRServer::process_rows(void *arg)
     {
         column_args.push_back(column_thread_arg(i, id, column_results));
     }
-    for (int i = 0; i < server->NUM_COL; i++)
+    for (int i = 0; i < server->NUM_COL_THREAD; i++)
     {
         mult_args.push_back(mult_thread_arg(i, 1, column_results));
     }
@@ -340,11 +418,11 @@ void *PIRServer::process_rows(void *arg)
     pthread_t col_process_thread[server->NUM_COL_THREAD];
     pthread_t col_mult_thread[server->NUM_COL_THREAD];
 
-    PIRServer::ProcessColStructure *process_col_structure_ptr[server->NUM_COL_THREAD];
     for (int row_idx = start_idx; row_idx < end_idx; row_idx++)
     {
         // time_start = chrono::high_resolution_clock::now();
 
+        PIRServer::ProcessColStructure *process_col_structure_ptr[server->NUM_COL_THREAD];
         for (int i = 0; i < server->NUM_COL_THREAD; i++)
         {
             column_args[i].row_idx = row_idx;
@@ -361,15 +439,15 @@ void *PIRServer::process_rows(void *arg)
             delete process_col_structure_ptr[i];
         }
 
-        PIRServer::MultiplyColStructure *mul_col_structure_ptr[server->NUM_COL];
-        for (int diff = 2; diff <= server->NUM_COL; diff *= 2)
+        PIRServer::MultiplyColStructure *mul_col_structure_ptr[server->NUM_COL_THREAD];
+        for (int diff = 2; diff <= server->NUM_COL_THREAD; diff *= 2)
         {
 
             for (int i = 0; i < mult_args.size(); i++)
             {
                 mult_args[i].diff = diff;
             }
-            for (int i = 0; i < server->NUM_COL; i += diff)
+            for (int i = 0; i < server->NUM_COL_THREAD; i += diff)
             {
                 mul_col_structure_ptr[i] = new PIRServer::MultiplyColStructure(mult_args[i], server);
                 if (pthread_create(&(col_mult_thread[i]), NULL, multiply_columns, static_cast<void *>(mul_col_structure_ptr[i])))
@@ -378,7 +456,7 @@ void *PIRServer::process_rows(void *arg)
                 }
             }
 
-            for (int i = 0; i < server->NUM_COL; i += diff)
+            for (int i = 0; i < server->NUM_COL_THREAD; i += diff)
             {
                 pthread_join(col_mult_thread[i], NULL);
                 delete mul_col_structure_ptr[i];
@@ -390,7 +468,7 @@ void *PIRServer::process_rows(void *arg)
 
         my_bfv_multiply(*(server->context), column_results[0], temp_ct, server->column_pools[0], server->TOTAL_MACHINE_THREAD / server->NUM_ROW_THREAD);
         my_relinearize_internal(*(server->context), column_results[0], server->relin_keys, 2, MemoryManager::GetPool(), server->TOTAL_MACHINE_THREAD / server->NUM_ROW_THREAD);
-        my_transform_to_ntt_inplace(*(server->context), column_results[0], server->TOTAL_MACHINE_THREAD);
+        my_transform_to_ntt_inplace(*(server->context), column_results[0], server->TOTAL_MACHINE_THREAD / server->NUM_ROW_THREAD);
         server->row_result[row_idx] = column_results[0];
     }
     return nullptr;
@@ -452,6 +530,7 @@ void *PIRServer::process_pir(void *arg)
     int column_per_thread = (server->pir_num_columns_per_obj / 2) / server->NUM_PIR_THREAD;
     int start_idx = my_id * column_per_thread;
     int end_idx = start_idx + column_per_thread - 1;
+
     server->pir_results[my_id] = get_sum(server->row_result, start_idx, end_idx, server);
 
     int mask = 1;
@@ -468,13 +547,12 @@ void *PIRServer::process_pir(void *arg)
 
 Ciphertext PIRServer::get_sum(vector<Ciphertext> &query, uint32_t start, uint32_t end, PIRServer *server)
 {
-    seal::Ciphertext result;
-
     if (start != end)
     {
         int count = (end - start) + 1;
         int next_power_of_two = get_next_power_of_two(count);
         int mid = next_power_of_two / 2;
+
         seal::Ciphertext left_sum = get_sum(query, start, start + mid - 1, server);
         seal::Ciphertext right_sum = get_sum(query, start + mid, end, server);
         my_rotate_internal(*server->context, right_sum, -mid, server->galois_keys, server->column_pools[0], server->TOTAL_MACHINE_THREAD / server->NUM_PIR_THREAD);

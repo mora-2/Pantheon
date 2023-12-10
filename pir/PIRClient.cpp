@@ -117,12 +117,51 @@ void PIRClient::QueryMake(int desired_index)
     // printf("query size (Byte): %lu\n", qss.str().size());
 }
 
+void PIRClient::QueryMake(string &desired_key)
+{
+    this->desired_key = desired_key;
+    vector<uint64_t> client_query_mat(N, 0ULL);
+
+    char str[NUM_COL * 4];
+    int j = 0;
+    for (j; j < desired_key.size(); j++)
+    {
+        str[j] = desired_key[j];
+    }
+    for (j; j < 4 * NUM_COL; j++)
+    {
+        str[j] = 0;
+    }
+
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    sha256(str, 4 * NUM_COL, hash);
+
+    for (int i = 0; i < NUM_COL; i++)
+    {
+        for (int j = i * (N / (NUM_COL * 2)); j < ((i + 1) * (N / (NUM_COL * 2))); j++)
+        {
+            client_query_mat[j] = (uint64_t(hash[4 * i]) << 8) + hash[4 * i + 1];
+            ;
+            client_query_mat[j + (N / 2)] = (uint64_t(hash[4 * i + 2]) << 8) + hash[4 * i + 3];
+            ;
+        }
+    }
+
+    Plaintext client_query_pt, result_pt;
+
+    batch_encoder->encode(client_query_mat, client_query_pt);
+    Serializable<Ciphertext> ser_query = encryptor->encrypt_symmetric(client_query_pt);
+    ser_query.save(qss); // save query ciphertext
+
+    // printf("query size (Byte): %lu\n", qss.str().size());
+}
+
 vector<uint64_t> PIRClient::Reconstruct(std::stringstream &ss)
 {
     Ciphertext final_result;
     final_result.load(*context, ss);
 
-    cout << "Result noise budget " << decryptor->invariant_noise_budget(final_result) << endl;
+    // cout << "Result noise budget " << decryptor->invariant_noise_budget(final_result) << endl;
 
     decryptor->decrypt(final_result, result_pt);
     batch_encoder->decode(result_pt, result_mat);
@@ -130,6 +169,19 @@ vector<uint64_t> PIRClient::Reconstruct(std::stringstream &ss)
     vector<uint64_t> decoded_response;
     decoded_response = rotate_plain(result_mat, desired_index % row_size);
     return decoded_response;
+}
+
+string PIRClient::ReconstructStr(std::stringstream &ss)
+{
+    Ciphertext final_result;
+    final_result.load(*context, ss);
+
+    // cout << "Result noise budget " << decryptor->invariant_noise_budget(final_result) << endl;
+
+    decryptor->decrypt(final_result, result_pt);
+    batch_encoder->decode(result_pt, result_mat);
+
+    return this->getresult();
 }
 
 void PIRClient::SetupDBParams(uint32_t key_size, uint32_t obj_size)
@@ -160,4 +212,53 @@ vector<uint64_t> PIRClient::rotate_plain(std::vector<uint64_t> original, int ind
     }
 
     return result;
+}
+
+string PIRClient::getresult()
+{
+    string res;
+    if (result_mat[result_mat.size() - 1] != 0 && result_mat[0] != 0)
+    {
+        int i = 0;
+        for (i; i < row_size; i++)
+        {
+            if (result_mat[i] == 0)
+                break;
+        }
+        int j = i;
+        int k = 0;
+        for (i; i < result_mat.size() + j; i++)
+        {
+            if (result_mat[i] != 0)
+            {
+                if (result_mat[i] < 256)
+                {
+                    res = res + static_cast<char>(result_mat[i]);
+                    break;
+                }
+                res = res + static_cast<char>(result_mat[i] / 256);
+                res = res + static_cast<char>(result_mat[i] % 256);
+                k++;
+            }
+        }
+    }
+    else
+    {
+        int k = 0;
+        for (int i = 0; i < result_mat.size(); i++)
+        {
+            if (result_mat[i] != 0)
+            {
+                if (result_mat[i] < 256)
+                {
+                    res = res + static_cast<char>(result_mat[i]);
+                    break;
+                }
+                res = res + static_cast<char>(result_mat[i] / 256);
+                res = res + static_cast<char>(result_mat[i] % 256);
+                k++;
+            }
+        }
+    }
+    return res;
 }

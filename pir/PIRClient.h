@@ -31,6 +31,7 @@ public:
 
     /* query */
     int desired_index;
+    string desired_key;
     std::stringstream qss;
 
     /* Reconstruct */
@@ -49,11 +50,13 @@ public:
     //-----------> send one_ct_ss
 
     /* QueryMake */
-    void QueryMake(int desired_index); // save to qss
+    void QueryMake(int desired_index);   // save to qss
+    void QueryMake(string &desired_key); // save to qss
     //-----------> send qss
 
     /* Reconstruct */
     vector<uint64_t> Reconstruct(std::stringstream &ss);
+    string ReconstructStr(std::stringstream &ss);
 
     ~PIRClient() = default;
 
@@ -61,4 +64,5 @@ private:
     void SetupDBParams(uint32_t key_size, uint32_t obj_size);
     void sha256(const char *str, int len, unsigned char *dest);
     vector<uint64_t> rotate_plain(std::vector<uint64_t> original, int index);
+    string getresult();
 };

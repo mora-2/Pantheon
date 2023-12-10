@@ -31,9 +31,11 @@ private:
     std::mutex mu_;
     PIRServer *server;
     string keys_file_dir;
+    vector<string> *db_keys;
+    vector<string> *db_elems;
 
 public:
-    explicit PantheonImpl(PIRServer *_server, string &keys_file_dir) : server(_server), keys_file_dir(keys_file_dir) {}
+    explicit PantheonImpl(PIRServer *_server, vector<string> *db_keys, vector<string> *db_elems, string &keys_file_dir) : server(_server), db_keys(db_keys), db_elems(db_elems), keys_file_dir(keys_file_dir) {}
 
     Status ReceiveParams(ServerContext *context, const Info *request, CryptoParams *response)
     {
@@ -113,7 +115,7 @@ public:
         }
         data_ss.str(data);
         server->RecOneCiphertext(data_ss);
-        server->SetupDB(); // compact_pid
+        server->SetupDB(*this->db_keys, *this->db_elems); // compact_pid
         // End of client config
 
         std::stringstream ss(request->qss());
@@ -135,13 +137,16 @@ public:
 void RunServer()
 {
     /* keys_file_dir */
-    string keys_file_dir = "../data/";
+    string keys_file_dir = "/home/yuance/Work/Encryption/PIR/code/PIR/Pantheon/http/gRPC/server/data/";
     /* init PIRServer */
     uint64_t number_of_items = 1000;
     uint32_t key_size = 64;
-    uint32_t obj_size = 128;
+    uint32_t obj_size = 32; // 256 bug?
+    vector<string> db_keys = {"cat", "dog", "chik", "monkk"};
+    vector<string> db_elems = {"cat", "dog", "fish", "dhsncjskfnxasdjwwwww"};
+
     PIRServer server(number_of_items, key_size, obj_size);
-    PantheonImpl service(&server, keys_file_dir);
+    PantheonImpl service(&server, &db_keys, &db_elems, keys_file_dir);
 
     /* server pre-process */
     server.SetupCryptoParams();

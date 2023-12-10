@@ -51,8 +51,8 @@ int main(int argc, char *argv[])
     /*-----------------------------------------------------------------*/
     /*                           QueryMake                             */
     /*-----------------------------------------------------------------*/
-    int desired_index = 0;
-    client.QueryMake(desired_index);
+    string desired_key = "monkk";
+    client.QueryMake(desired_key);
     std::cout << "[" << clientID << "] "
               << "2.Query made." << std::endl;
 
@@ -64,7 +64,9 @@ int main(int argc, char *argv[])
     /*-----------------------------------------------------------------*/
     /*                           Reconstruct                           */
     /*-----------------------------------------------------------------*/
-    auto decoded_response = client.Reconstruct(rpc_client.answer_ss);
+    auto decoded_response = client.ReconstructStr(rpc_client.answer_ss);
+    std::cout << "[" << clientID << "] "
+              << "4.Answer reconstructed: " << decoded_response << std::endl;
 
     return 0;
 }

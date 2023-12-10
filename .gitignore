@@ -439,3 +439,11 @@ http/gRPC/server/data/olive/keys
 http/gRPC/server/data/olive/oneciphertext
 http/gRPC/server/data/peter/keys
 http/gRPC/server/data/peter/oneciphertext
+http/gRPC/client/data/alex/crypto_params
+http/gRPC/client/data/alex/crypto_secretkey
+http/gRPC/client/data/jack/crypto_params
+http/gRPC/client/data/jack/crypto_secretkey
+http/gRPC/server/data/alex/keys
+http/gRPC/server/data/alex/oneciphertext
+http/gRPC/server/data/jack/keys
+http/gRPC/server/data/jack/oneciphertext
