@@ -63,3 +63,11 @@ target_link_libraries(${_target}
     ${_REFLECTION}
     ${_GRPC_GRPCPP}
     ${_PROTOBUF_LIBPROTOBUF})
+
+add_executable(${_target}_offline ${_target}_offline.cpp)
+target_link_libraries(${_target}_offline
+    pir_grpc_proto
+    Pantheon
+    ${_REFLECTION}
+    ${_GRPC_GRPCPP}
+    ${_PROTOBUF_LIBPROTOBUF})

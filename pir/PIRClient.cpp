@@ -43,6 +43,26 @@ void PIRClient::SetupCrypto(std::stringstream &parms_ss)
     this->decryptor = std::make_unique<Decryptor>(*context, secret_key);
 }
 
+void PIRClient::SetupCrypto(std::string &load_file_dir)
+{
+    string loaded_data = loadFromBinaryFile(load_file_dir + "/crypto_params");
+    std::stringstream ss(loaded_data);
+
+    this->parms = std::make_unique<EncryptionParameters>();
+    this->parms->load(ss);
+    this->context = std::make_unique<SEALContext>(*parms);
+
+    loaded_data = loadFromBinaryFile(load_file_dir + "/crypto_secretkey");
+    ss.str(loaded_data);
+    this->secret_key.load(*context, ss);
+
+    this->batch_encoder = std::make_unique<BatchEncoder>(*context);
+    this->row_size = batch_encoder->slot_count() / 2;
+    this->encryptor = std::make_unique<Encryptor>(*context, this->secret_key);
+    this->evaluator = std::make_unique<Evaluator>(*context);
+    this->decryptor = std::make_unique<Decryptor>(*context, secret_key);
+}
+
 void PIRClient::SetOneCiphertext()
 {
     vector<uint64_t> temp_mat;
@@ -94,7 +114,7 @@ void PIRClient::QueryMake(int desired_index)
     Serializable<Ciphertext> ser_query = encryptor->encrypt_symmetric(client_query_pt);
     ser_query.save(qss); // save query ciphertext
 
-    printf("query size (Byte): %lu\n", qss.str().size());
+    // printf("query size (Byte): %lu\n", qss.str().size());
 }
 
 vector<uint64_t> PIRClient::Reconstruct(std::stringstream &ss)

@@ -43,6 +43,7 @@ void PIRServer::RecOneCiphertext(std::stringstream &one_ct_ss)
 
 void PIRServer::SetupDB()
 {
+    this->pir_db.resize(0);
     populate_db();
     for (int i = 0; i < pir_num_obj; i++)
     {
@@ -169,7 +170,7 @@ void PIRServer::Process2()
     }
 
     Ciphertext final_result = pir_results[0];
-    final_result.save(ss);
+    final_result.save(this->ss);
 }
 
 void PIRServer::SetupDBParams(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size)
@@ -211,6 +212,8 @@ void PIRServer::SetupPIRParams()
 
 void PIRServer::populate_db()
 {
+    this->db.resize(0);
+
     vector<vector<uint64_t>> mat_db;
     for (int i = 0; i < NUM_ROW * NUM_COL; i++)
     {

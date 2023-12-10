@@ -118,3 +118,6 @@ inline void my_multiply_poly_scalar_coeffmod(ConstRNSIter poly, std::size_t coef
         multiply_poly_scalar_coeffmod(poly[i], poly_modulus_degree, scalar, modulus[i], result[i]);
     }
 }
+
+void saveToBinaryFile(const std::string &filename, const std::string &data);
+std::string loadFromBinaryFile(const std::string &filename);

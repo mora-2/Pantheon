@@ -41,6 +41,7 @@ public:
     PIRClient(uint32_t key_size, uint32_t obj_size);
     /* Crypto setup */
     void SetupCrypto(std::stringstream &parms_ss);
+    void SetupCrypto(std::string &load_file_dir);
     //-----------> send key_ss
 
     /* SentOneCiphertext */

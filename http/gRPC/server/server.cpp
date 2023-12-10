@@ -16,6 +16,7 @@ using grpc::ServerContext;
 using grpc::ServerReader;
 using grpc::ServerReaderWriter;
 using grpc::Status;
+using grpc::StatusCode;
 using pantheon::CryptoKeys;
 using pantheon::CryptoParams;
 using pantheon::Info;
@@ -26,19 +27,26 @@ using pantheon::ResponseStream;
 
 class PantheonImpl final : public PantheonInterface::Service
 {
+private:
+    std::mutex mu_;
+    PIRServer *server;
+    string keys_file_dir;
+
 public:
-    explicit PantheonImpl(PIRServer *_server) : server(_server) {}
+    explicit PantheonImpl(PIRServer *_server, string &keys_file_dir) : server(_server), keys_file_dir(keys_file_dir) {}
 
     Status ReceiveParams(ServerContext *context, const Info *request, CryptoParams *response)
     {
-        std::unique_lock<std::mutex> lock(this->mu_);
+        const string client_id = context->client_metadata().find("client_id")->second.data();
+
         response->set_parms_ss(server->parms_ss.str());
-        std::cout << "1.ReceiveParams finished." << std::endl;
+        std::cout << "[" << client_id << "] "
+                  << "1.ReceiveParams finished." << std::endl;
         return Status::OK;
     }
     Status SendKeys(ServerContext *context, ServerReader<CryptoKeys> *reader, Info *response)
     {
-        std::unique_lock<std::mutex> lock(this->mu_);
+        const string client_id = context->client_metadata().find("client_id")->second.data();
         std::stringstream ss;
         CryptoKeys keys_ss;
 
@@ -46,50 +54,94 @@ public:
         while (reader->Read(&keys_ss))
         {
             ss << keys_ss.keys_ss();
-            std::cout << "\r"
-                      << "Receive Msgs Count: " << i++ << std::flush;
         }
-        std::cout << std::endl;
+        // check stream status
+        if (context->IsCancelled())
+        {
+            return Status::CANCELLED;
+        }
 
-        server->SetupKeys(ss);
-        std::cout << "2.SendKeys finished." << std::endl;
+        // save stream to file
+        saveToBinaryFile(keys_file_dir + client_id + "/keys", ss.str());
+
+        std::cout << "[" << client_id << "] "
+                  << "2.SendKeys finished." << std::endl;
         return Status::OK;
     }
     Status SendOneCiphertext(ServerContext *context, const OneCiphertext *request, Info *response)
     {
-        std::unique_lock<std::mutex> lock(this->mu_);
+        const string client_id = context->client_metadata().find("client_id")->second.data();
         std::stringstream ss(request->one_ct_ss());
-        server->RecOneCiphertext(ss);
-        server->SetupDB(); // compact_pid
-        std::cout << "3.SendOneCiphertext finished." << std::endl;
+
+        // save steram to file
+        saveToBinaryFile(keys_file_dir + client_id + "/oneciphertext", ss.str());
+        // check stream status
+        if (context->IsCancelled())
+        {
+            return Status::CANCELLED;
+        }
+
+        std::cout << "[" << client_id << "] "
+                  << "3.SendOneCiphertext finished." << std::endl;
         return Status::OK;
     }
     Status Query(ServerContext *context, const QueryStream *request, ResponseStream *response)
     {
         std::unique_lock<std::mutex> lock(this->mu_);
+        const string client_id = context->client_metadata().find("client_id")->second.data();
+        std::cout << "\r"
+                  << "[" << client_id << "] "
+                  << "4.Querying..." << std::flush;
+
+        // loading client config
+        std::string data = loadFromBinaryFile(keys_file_dir + client_id + "/keys");
+        if (data == "")
+        {
+            Status status(StatusCode::UNAUTHENTICATED, "client haven't setup yet!");
+            return status;
+        }
+        std::stringstream data_ss(data);
+        server->SetupKeys(data_ss);
+        data_ss.clear();
+        data_ss.str("");
+
+        data = loadFromBinaryFile(keys_file_dir + client_id + "/oneciphertext");
+        if (data == "")
+        {
+            Status status(StatusCode::UNAUTHENTICATED, "client haven't setup yet!");
+            return status;
+        }
+        data_ss.str(data);
+        server->RecOneCiphertext(data_ss);
+        server->SetupDB(); // compact_pid
+        // End of client config
+
         std::stringstream ss(request->qss());
         server->QueryExpand(ss);
         server->Process1();
-        server->Process2();
+        server->Process2(); // result to server->ss
 
         response->set_ss(server->ss.str());
-        std::cout << "4.Query finished." << std::endl;
+        server->ss.clear();
+        server->ss.str("");
+
+        std::cout << "\r"
+                  << "[" << client_id << "] "
+                  << "4.Query finished." << std::endl;
         return Status::OK;
     }
-
-private:
-    std::mutex mu_;
-    PIRServer *server;
 };
 
 void RunServer()
 {
+    /* keys_file_dir */
+    string keys_file_dir = "../data/";
     /* init PIRServer */
     uint64_t number_of_items = 1000;
     uint32_t key_size = 64;
     uint32_t obj_size = 128;
     PIRServer server(number_of_items, key_size, obj_size);
-    PantheonImpl service(&server);
+    PantheonImpl service(&server, keys_file_dir);
 
     /* server pre-process */
     server.SetupCryptoParams();

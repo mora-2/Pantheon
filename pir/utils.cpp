@@ -1,4 +1,6 @@
 #include "utils.h"
+#include <fstream>
+#include <filesystem>
 
 void my_add_inplace(SEALContext &context_, Ciphertext &encrypted1, Ciphertext &encrypted2)
 {
@@ -1269,4 +1271,58 @@ void my_apply_galois_inplace(SEALContext context_, Ciphertext &encrypted, uint32
 
     // Calculate (temp * galois_key[0], temp * galois_key[1]) + (ct[0], 0)
     my_switch_key_inplace(context_, encrypted, temp, static_cast<const KSwitchKeys &>(galois_keys), GaloisKeys::get_index(galois_elt), pool, num_threads);
+}
+
+void saveToBinaryFile(const std::string &filename, const std::string &data)
+{
+    // 获取目录部分
+    std::string directory = std::filesystem::path(filename).parent_path();
+
+    // 确保目录存在，如果不存在则创建
+    std::filesystem::create_directories(directory);
+
+    // 使用二进制模式打开文件
+    std::ofstream file(filename, std::ios::out | std::ios::binary);
+
+    if (file.is_open())
+    {
+        // 将字符串数据写入文件
+        file.write(data.c_str(), data.size());
+
+        // 关闭文件
+        file.close();
+        std::cout << "Data saved to file: " << filename << std::endl;
+    }
+    else
+    {
+        std::cerr << "Error opening file: " << filename << std::endl;
+    }
+}
+
+std::string loadFromBinaryFile(const std::string &filename)
+{
+    std::ifstream file(filename, std::ios::in | std::ios::binary);
+
+    if (file.is_open())
+    {
+        // 获取文件大小
+        file.seekg(0, std::ios::end);
+        std::streamsize size = file.tellg();
+        file.seekg(0, std::ios::beg);
+
+        // 读取文件内容到字符串
+        std::string data(size, 0);
+        file.read(&data[0], size);
+
+        // 关闭文件
+        file.close();
+        // std::cout << "Data loaded from file: " << filename << std::endl;
+
+        return data;
+    }
+    else
+    {
+        std::cerr << "Error opening file: " << filename << std::endl;
+        return "";
+    }
 }

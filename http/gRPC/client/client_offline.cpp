@@ -41,30 +41,28 @@ int main(int argc, char *argv[])
     PantheonClient rpc_client(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()), &client, clientID);
 
     /*-----------------------------------------------------------------*/
-    /*                           Load from file                        */
+    /*                           CryptoParamSet                        */
     /*-----------------------------------------------------------------*/
-    string load_file_dir = "../data/" + clientID;
-    client.SetupCrypto(load_file_dir);
-    std::cout << "[" << clientID << "] "
-              << "1.Crypto params loaded." << std::endl;
+    rpc_client.ReceiveParams();
+    client.SetupCrypto(rpc_client.parms_ss);
+    rpc_client.SendKeys(client.keys_ss);
 
     /*-----------------------------------------------------------------*/
-    /*                           QueryMake                             */
+    /*                           OneCiphertext                         */
     /*-----------------------------------------------------------------*/
-    int desired_index = 0;
-    client.QueryMake(desired_index);
-    std::cout << "[" << clientID << "] "
-              << "2.Query made." << std::endl;
+    client.SetOneCiphertext();
+    rpc_client.SendOneCiphertext(client.one_ct_ss);
 
     /*-----------------------------------------------------------------*/
-    /*                           Answer                                */
+    /*                           Save to file                          */
     /*-----------------------------------------------------------------*/
-    rpc_client.Query(client.qss);
+    string save_file_path = "../data/" + clientID + "/crypto_params";
+    saveToBinaryFile(save_file_path, rpc_client.parms_ss.str());
 
-    /*-----------------------------------------------------------------*/
-    /*                           Reconstruct                           */
-    /*-----------------------------------------------------------------*/
-    auto decoded_response = client.Reconstruct(rpc_client.answer_ss);
+    std::stringstream ss;
+    client.secret_key.save(ss);
+    save_file_path = "../data/" + clientID + "/crypto_secretkey";
+    saveToBinaryFile(save_file_path, ss.str());
 
     return 0;
 }
