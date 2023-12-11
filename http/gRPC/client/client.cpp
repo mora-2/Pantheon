@@ -27,7 +27,11 @@ using pantheon::ResponseStream;
 int main(int argc, char *argv[])
 {
     /* client ID */
-    string clientID = ParamsParse(argc, argv);
+    Params input;
+    ParamsParse(argc, argv, input);
+    string clientID = input.clientID;
+    string desired_key = input.q_key;
+
     if (clientID == "")
     {
         return -1;
@@ -51,7 +55,6 @@ int main(int argc, char *argv[])
     /*-----------------------------------------------------------------*/
     /*                           QueryMake                             */
     /*-----------------------------------------------------------------*/
-    string desired_key = "monkk";
     client.QueryMake(desired_key);
     std::cout << "[" << clientID << "] "
               << "2.Query made." << std::endl;

@@ -141,9 +141,9 @@ void RunServer()
     /* init PIRServer */
     uint64_t number_of_items = 1000;
     uint32_t key_size = 64;
-    uint32_t obj_size = 32; // 256 bug?
-    vector<string> db_keys = {"cat", "dog", "chik", "monkk"};
-    vector<string> db_elems = {"cat", "dog", "fish", "dhsncjskfnxasdjwwwww"};
+    uint32_t obj_size = 128; // 256 bug?
+    vector<string> db_keys = {"apple", "banana", "cat", "dog"};
+    vector<string> db_elems = {"Aapple", "Abanana", "Acat", "Adog"};
 
     PIRServer server(number_of_items, key_size, obj_size);
     PantheonImpl service(&server, &db_keys, &db_elems, keys_file_dir);

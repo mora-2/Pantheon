@@ -55,13 +55,13 @@ void PIRServer::SetupDB()
         }
         pir_db.push_back(v);
     }
-
     set_pir_db(pir_db);
     // cout << "DB population complete!" << endl;
 }
 
 void PIRServer::SetupDB(vector<string> &keydb, vector<string> &elems)
 {
+    this->pir_db.resize(0);
     populate_db(keydb);
     for (int i = 0; i < pir_num_obj; i++)
     {

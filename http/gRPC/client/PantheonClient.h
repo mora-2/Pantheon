@@ -165,6 +165,12 @@ public:
     }
 };
 
+struct Params
+{
+    string clientID;
+    string q_key;
+};
+
 string ParamsParse(int argc, char *argv[])
 {
     int opt;
@@ -194,4 +200,37 @@ string ParamsParse(int argc, char *argv[])
     }
 
     return string(id);
+}
+
+void ParamsParse(int argc, char *argv[], Params &params)
+{
+    int opt;
+    char *id = NULL;
+    char *q_key = NULL;
+    const char *optstring = "i:q:";
+    while ((opt = getopt(argc, argv, optstring)) != -1)
+    {
+        switch (opt)
+        {
+        case 'i':
+            id = optarg;
+            break;
+        case 'q':
+            q_key = optarg;
+            break;
+        case '?':
+            break;
+        default:
+            fprintf(stderr, "Usage: %s -i clientID -q query_key\n", argv[0]);
+        }
+    }
+
+    if (id == NULL || q_key == NULL)
+    {
+        fprintf(stderr, "You must specify arguments.\n");
+        fprintf(stderr, "Usage: %s -i clientID -q query_key\n", argv[0]);
+    }
+
+    params.clientID = id;
+    params.q_key = q_key;
 }
