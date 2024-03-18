@@ -447,3 +447,5 @@ http/gRPC/server/data/alex/keys
 http/gRPC/server/data/alex/oneciphertext
 http/gRPC/server/data/jack/keys
 http/gRPC/server/data/jack/oneciphertext
+http/gRPC/client/data/duke/crypto_params
+http/gRPC/client/data/duke/crypto_secretkey

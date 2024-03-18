@@ -170,6 +170,25 @@ vector<uint64_t> PIRClient::Reconstruct(std::stringstream &ss)
     decoded_response = rotate_plain(result_mat, desired_index % row_size);
     return decoded_response;
 }
+vector<vector<uint64_t>> PIRClient::Reconstruct(std::stringstream &ss, size_t num_multimap)
+{
+    vector<vector<uint64_t>> decoded_response;
+    for (size_t i = 0; i < num_multimap; i++)
+    {
+        Ciphertext final_result;
+        final_result.load(*context, ss);
+
+        // cout << "Result noise budget " << decryptor->invariant_noise_budget(final_result) << endl;
+
+        decryptor->decrypt(final_result, result_pt);
+        batch_encoder->decode(result_pt, result_mat);
+
+        vector<uint64_t> response;
+        response = rotate_plain(result_mat, desired_index % row_size);
+        decoded_response.push_back(response);
+    }
+    return decoded_response;
+}
 
 string PIRClient::ReconstructStr(std::stringstream &ss)
 {

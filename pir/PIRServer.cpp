@@ -10,11 +10,21 @@
 
 PIRServer::PIRServer(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size)
 {
+    this->num_multimap = 0;
     this->SetupDBParams(number_of_items, key_size, obj_size);
     this->SetupMemPool();
     this->SetupPIRParams();
     this->SetupThreadParams();
 }
+
+PIRServer::PIRServer(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size, uint32_t num_multimap)
+{
+    this->SetupDBParams(number_of_items, key_size, obj_size, num_multimap);
+    this->SetupMemPool();
+    this->SetupPIRParams();
+    this->SetupThreadParams();
+}
+
 void PIRServer::SetupCryptoParams()
 {
     this->parms = std::make_unique<EncryptionParameters>(scheme_type::bfv);
@@ -44,19 +54,47 @@ void PIRServer::RecOneCiphertext(std::stringstream &one_ct_ss)
 
 void PIRServer::SetupDB()
 {
-    this->pir_db.resize(0);
-    populate_db();
-    for (int i = 0; i < pir_num_obj; i++)
+    if (this->num_multimap == 0)
     {
-        vector<uint64_t> v;
-        for (int j = 0; j < (pir_obj_size / 2); j++)
-        { // 2 bytes each plaintxt slot
-            v.push_back(rand() % PLAIN_MODULUS);
+        this->pir_db.resize(0);
+        populate_db();
+        for (int i = 0; i < pir_num_obj; i++)
+        {
+            vector<uint64_t> v;
+            for (int j = 0; j < (pir_obj_size / 2); j++)
+            { // 2 bytes each plaintxt slot
+                v.push_back(rand() % PLAIN_MODULUS);
+            }
+            pir_db.push_back(v);
         }
-        pir_db.push_back(v);
+        set_pir_db(pir_db);
+        // cout << "DB population complete!" << endl;
     }
-    set_pir_db(pir_db);
-    // cout << "DB population complete!" << endl;
+    else
+    {
+        this->multimap_pir_db.resize(this->num_multimap);
+        for (vector<vector<uint64_t>> &e : this->multimap_pir_db)
+        {
+            e.resize(0);
+        }
+
+        this->populate_multimap_db();
+
+        this->multimap_pir_encoded_db.resize(num_multimap);
+        for (size_t db_i = 0; db_i < this->num_multimap; db_i++)
+        {
+            for (int i = 0; i < pir_num_obj; i++)
+            {
+                vector<uint64_t> v;
+                for (int j = 0; j < (pir_obj_size / 2); j++)
+                { // 2 bytes each plaintxt slot
+                    v.push_back(rand() % PLAIN_MODULUS);
+                }
+                multimap_pir_db[db_i].push_back(v);
+            }
+            set_pir_multimap_db(multimap_pir_db[db_i], db_i);
+        }
+    }
 }
 
 void PIRServer::SetupDB(vector<string> &keydb, vector<string> &elems)
@@ -131,73 +169,86 @@ void PIRServer::QueryExpand(std::stringstream &qss)
 
 void PIRServer::Process1()
 {
-    this->row_result.resize(NUM_ROW);
-    pthread_t row_process_thread[NUM_ROW_THREAD];
-    int row_thread_id[NUM_ROW_THREAD];
-    for (int i = 0; i < NUM_ROW_THREAD; i++)
+    this->multimap_row_result.resize(num_multimap);
+    for (vector<Ciphertext> &e : this->multimap_row_result)
     {
-        row_thread_id[i] = i;
+        e.resize(NUM_ROW);
     }
-
-    PIRServer::ProcessRowStructure *process_row_structure_ptr[NUM_ROW_THREAD];
-    if (NUM_ROW_THREAD == 1)
+    for (size_t db_i = 0; db_i < this->num_multimap; db_i++)
     {
-        process_row_structure_ptr[0] = new PIRServer::ProcessRowStructure(row_thread_id[0], this);
-        process_rows(static_cast<void *>(process_row_structure_ptr[0]));
-        delete process_row_structure_ptr[0];
-    }
-    else
-    {
+        pthread_t row_process_thread[NUM_ROW_THREAD];
+        int row_thread_id[NUM_ROW_THREAD];
         for (int i = 0; i < NUM_ROW_THREAD; i++)
         {
-            process_row_structure_ptr[i] = new PIRServer::ProcessRowStructure(row_thread_id[i], this);
-            if (pthread_create(&(row_process_thread[i]), NULL, process_rows, static_cast<void *>(process_row_structure_ptr[i])))
-            {
-                printf("Error creating processing thread");
-            }
+            row_thread_id[i] = i;
         }
 
-        for (int i = 0; i < NUM_ROW_THREAD; i++)
+        PIRServer::ProcessRowStructure *process_row_structure_ptr[NUM_ROW_THREAD];
+        if (NUM_ROW_THREAD == 1)
         {
-            pthread_join(row_process_thread[i], NULL);
-            delete process_row_structure_ptr[i];
+            process_row_structure_ptr[0] = new PIRServer::ProcessRowStructure(row_thread_id[0], db_i, this);
+            process_rows(static_cast<void *>(process_row_structure_ptr[0]));
+            delete process_row_structure_ptr[0];
+        }
+        else
+        {
+            for (int i = 0; i < NUM_ROW_THREAD; i++)
+            {
+                process_row_structure_ptr[i] = new PIRServer::ProcessRowStructure(row_thread_id[i], db_i, this);
+                if (pthread_create(&(row_process_thread[i]), NULL, process_rows, static_cast<void *>(process_row_structure_ptr[i])))
+                {
+                    printf("Error creating processing thread");
+                }
+            }
+
+            for (int i = 0; i < NUM_ROW_THREAD; i++)
+            {
+                pthread_join(row_process_thread[i], NULL);
+                delete process_row_structure_ptr[i];
+            }
         }
     }
 }
 
 void PIRServer::Process2()
 {
-    this->pir_results.resize(NUM_PIR_THREAD);
-
-    pthread_t pir_thread[NUM_PIR_THREAD];
-    int pir_thread_id[NUM_PIR_THREAD];
-    for (int i = 0; i < NUM_PIR_THREAD; i++)
+    this->multimap_pir_results.resize(num_multimap);
+    for (vector<Ciphertext> &e : this->multimap_pir_results)
     {
-        pir_thread_id[i] = i;
+        e.resize(NUM_PIR_THREAD);
     }
-
-    PIRServer::ProcessPIRStructure *process_pir_structure_ptr[NUM_PIR_THREAD];
-    for (int i = 0; i < NUM_PIR_THREAD; i++)
+    for (size_t db_i = 0; db_i < this->num_multimap; db_i++)
     {
-        process_pir_structure_ptr[i] = new PIRServer::ProcessPIRStructure(pir_thread_id[i], this);
-        if (pthread_create(&(pir_thread[i]), NULL, process_pir, static_cast<void *>(process_pir_structure_ptr[i])))
+        pthread_t pir_thread[NUM_PIR_THREAD];
+        int pir_thread_id[NUM_PIR_THREAD];
+        for (int i = 0; i < NUM_PIR_THREAD; i++)
         {
-            printf("Error creating PIR processing thread");
+            pir_thread_id[i] = i;
         }
-    }
 
-    for (int i = 0; i < NUM_PIR_THREAD; i++)
-    {
-        pthread_join(pir_thread[i], NULL);
-        delete process_pir_structure_ptr[i];
-    }
-    for (int i = 1; i < NUM_PIR_THREAD; i++)
-    {
-        my_add_inplace(*context, pir_results[0], pir_results[i]);
-    }
+        PIRServer::ProcessPIRStructure *process_pir_structure_ptr[NUM_PIR_THREAD];
+        for (int i = 0; i < NUM_PIR_THREAD; i++)
+        {
+            process_pir_structure_ptr[i] = new PIRServer::ProcessPIRStructure(pir_thread_id[i], db_i, this);
+            if (pthread_create(&(pir_thread[i]), NULL, process_pir, static_cast<void *>(process_pir_structure_ptr[i])))
+            {
+                printf("Error creating PIR processing thread");
+            }
+        }
 
-    Ciphertext final_result = pir_results[0];
-    final_result.save(this->ss);
+        for (int i = 0; i < NUM_PIR_THREAD; i++)
+        {
+            pthread_join(pir_thread[i], NULL);
+            delete process_pir_structure_ptr[i];
+        }
+        for (int i = 1; i < NUM_PIR_THREAD; i++)
+        {
+            my_add_inplace(*context, multimap_pir_results[db_i][0], multimap_pir_results[db_i][i]);
+        }
+
+        Ciphertext final_result = multimap_pir_results[db_i][0];
+        final_result.save(this->ss);
+    }
 }
 
 void PIRServer::SetupDBParams(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size)
@@ -205,6 +256,16 @@ void PIRServer::SetupDBParams(uint64_t number_of_items, uint32_t key_size, uint3
     this->number_of_items = number_of_items;
     this->key_size = key_size;
     this->obj_size = obj_size;
+    this->NUM_COL = (int)ceil(key_size / (2.0 * PLAIN_BIT));
+    this->NUM_ROW = (int)ceil(number_of_items / ((double)(N / 2)));
+}
+
+void PIRServer::SetupDBParams(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size, uint32_t num_multimap)
+{
+    this->number_of_items = number_of_items;
+    this->key_size = key_size;
+    this->obj_size = obj_size;
+    this->num_multimap = num_multimap;
     this->NUM_COL = (int)ceil(key_size / (2.0 * PLAIN_BIT));
     this->NUM_ROW = (int)ceil(number_of_items / ((double)(N / 2)));
 }
@@ -274,6 +335,53 @@ void PIRServer::populate_db()
             row_partition.push_back(pt);
         }
         db.push_back(row_partition);
+    }
+    return;
+}
+
+void PIRServer::populate_multimap_db()
+{
+    this->multimap_db.resize(this->num_multimap);
+    for (vector<vector<Plaintext>> &e : this->multimap_db)
+    {
+        e.resize(0);
+    }
+
+    for (size_t db_i = 0; db_i < this->num_multimap; db_i++)
+    {
+        vector<vector<uint64_t>> mat_db;
+        for (int i = 0; i < NUM_ROW * NUM_COL; i++)
+        {
+            vector<uint64_t> v(N, 0ULL);
+            mat_db.push_back(v);
+        }
+        unsigned char hash[SHA256_DIGEST_LENGTH];
+
+        for (uint32_t row = 0; row < NUM_ROW * (N / 2); row++)
+        {
+            uint32_t row_in_vector = row % (N / 2);
+            uint32_t val = row + 1;
+            const char str[] = {val & 0xFF, (val >> 8) & 0xFF, (val >> 16) & 0xFF, (val >> 24) & 0xFF, 0};
+            sha256(str, 4, hash);
+            for (int col = 0; col < NUM_COL; col++)
+            {
+                int vector_idx = (row / (N / 2)) * NUM_COL + col;
+                mat_db[vector_idx][row_in_vector] = (uint64_t(hash[4 * col]) << 8) + hash[4 * col + 1];
+                mat_db[vector_idx][row_in_vector + (N / 2)] = (uint64_t(hash[4 * col + 2]) << 8) + hash[4 * col + 3];
+            }
+        }
+
+        for (int i = 0; i < NUM_ROW; i++)
+        {
+            vector<Plaintext> row_partition;
+            for (int j = 0; j < NUM_COL; j++)
+            {
+                Plaintext pt;
+                batch_encoder->encode(mat_db[i * NUM_COL + j], pt);
+                row_partition.push_back(pt);
+            }
+            multimap_db[db_i].push_back(row_partition);
+        }
     }
     return;
 }
@@ -373,10 +481,48 @@ void PIRServer::pir_encode_db(std::vector<std::vector<uint64_t>> db)
     }
 }
 
+void PIRServer::set_pir_multimap_db(std::vector<std::vector<uint64_t>> db, size_t db_i)
+{
+    assert(db.size() == pir_num_obj);
+    std::vector<std::vector<uint64_t>> extended_db(pir_db_rows);
+    for (int i = 0; i < pir_db_rows; i++)
+    {
+        extended_db[i] = std::vector<uint64_t>(N, 1ULL);
+    }
+    int row_size = N / 2;
+
+    for (int i = 0; i < pir_num_obj; i++)
+    {
+        std::vector<uint64_t> temp = db[i];
+
+        int row = (i / row_size);
+        int col = (i % row_size);
+        for (int j = 0; j < pir_num_columns_per_obj / 2; j++)
+        {
+            extended_db[row][col] = temp[j];
+            extended_db[row][col + row_size] = temp[j + (pir_num_columns_per_obj / 2)];
+            row += pir_num_query_ciphertext;
+        }
+    }
+    pir_encode_multimap_db(extended_db, db_i);
+    return;
+}
+
+void PIRServer::pir_encode_multimap_db(std::vector<std::vector<uint64_t>> db, size_t db_i)
+{
+    multimap_pir_encoded_db[db_i] = std::vector<seal::Plaintext>(db.size());
+    for (int i = 0; i < db.size(); i++)
+    {
+        batch_encoder->encode(db[i], multimap_pir_encoded_db[db_i][i]);
+        evaluator->transform_to_ntt_inplace(multimap_pir_encoded_db[db_i][i], compact_pid);
+    }
+}
+
 void *PIRServer::expand_query(void *arg)
 {
     PIRServer::ExpandQueryStructure *args_ptr = static_cast<PIRServer::ExpandQueryStructure *>(arg);
     int id = args_ptr->id;
+    size_t db_i = args_ptr->db_i;
     PIRServer *server = args_ptr->server;
 
     server->expanded_query[id] = server->server_query_ct;
@@ -397,6 +543,7 @@ void *PIRServer::process_rows(void *arg)
 {
     PIRServer::ProcessRowStructure *args_ptr = static_cast<PIRServer::ProcessRowStructure *>(arg);
     int id = args_ptr->id; // row thread ID
+    size_t db_i = args_ptr->db_i;
     PIRServer *server = args_ptr->server;
 
     Ciphertext column_results[server->NUM_COL];
@@ -409,7 +556,7 @@ void *PIRServer::process_rows(void *arg)
     }
     for (int i = 0; i < server->NUM_COL_THREAD; i++)
     {
-        mult_args.push_back(mult_thread_arg(i, 1, column_results));
+        mult_args.push_back(mult_thread_arg(i, 1, column_results)); // ??????
     }
     int num_row_per_thread = server->NUM_ROW / server->NUM_ROW_THREAD;
     int start_idx = num_row_per_thread * id;
@@ -426,7 +573,7 @@ void *PIRServer::process_rows(void *arg)
         for (int i = 0; i < server->NUM_COL_THREAD; i++)
         {
             column_args[i].row_idx = row_idx;
-            process_col_structure_ptr[i] = new PIRServer::ProcessColStructure(column_args[i], server);
+            process_col_structure_ptr[i] = new PIRServer::ProcessColStructure(column_args[i], db_i, server);
             if (pthread_create(&(col_process_thread[i]), NULL, process_columns, static_cast<void *>(process_col_structure_ptr[i])))
             {
                 printf("Error creating column processing thread");
@@ -449,7 +596,7 @@ void *PIRServer::process_rows(void *arg)
             }
             for (int i = 0; i < server->NUM_COL_THREAD; i += diff)
             {
-                mul_col_structure_ptr[i] = new PIRServer::MultiplyColStructure(mult_args[i], server);
+                mul_col_structure_ptr[i] = new PIRServer::MultiplyColStructure(mult_args[i], db_i, server);
                 if (pthread_create(&(col_mult_thread[i]), NULL, multiply_columns, static_cast<void *>(mul_col_structure_ptr[i])))
                 {
                     printf("Error creating column processing thread");
@@ -469,7 +616,7 @@ void *PIRServer::process_rows(void *arg)
         my_bfv_multiply(*(server->context), column_results[0], temp_ct, server->column_pools[0], server->TOTAL_MACHINE_THREAD / server->NUM_ROW_THREAD);
         my_relinearize_internal(*(server->context), column_results[0], server->relin_keys, 2, MemoryManager::GetPool(), server->TOTAL_MACHINE_THREAD / server->NUM_ROW_THREAD);
         my_transform_to_ntt_inplace(*(server->context), column_results[0], server->TOTAL_MACHINE_THREAD / server->NUM_ROW_THREAD);
-        server->row_result[row_idx] = column_results[0];
+        server->multimap_row_result[db_i][row_idx] = column_results[0];
     }
     return nullptr;
 }
@@ -478,6 +625,7 @@ void *PIRServer::process_columns(void *arg)
 {
     PIRServer::ProcessColStructure *args_ptr = static_cast<PIRServer::ProcessColStructure *>(arg);
     column_thread_arg col_arg = args_ptr->col_arg;
+    size_t db_i = args_ptr->db_i;
     PIRServer *server = args_ptr->server;
 
     vector<unsigned long> exp_time;
@@ -488,8 +636,7 @@ void *PIRServer::process_columns(void *arg)
     for (int i = start_idx; i < end_idx; i++)
     {
         Ciphertext sub;
-        Ciphertext prod;
-        server->evaluator->sub_plain(server->expanded_query[i], server->db[col_arg.row_idx][i], sub);
+        server->evaluator->sub_plain(server->expanded_query[i], server->multimap_db[db_i][col_arg.row_idx][i], sub);
 
         for (int k = 0; k < 16; k++)
         {
@@ -509,6 +656,7 @@ void *PIRServer::multiply_columns(void *arg)
 {
     PIRServer::MultiplyColStructure *args_ptr = static_cast<PIRServer::MultiplyColStructure *>(arg);
     mult_thread_arg mult_arg = args_ptr->mult_arg;
+    size_t db_i = args_ptr->db_i;
     PIRServer *server = args_ptr->server;
 
     Ciphertext *column_results = mult_arg.column_result;
@@ -525,20 +673,21 @@ void *PIRServer::process_pir(void *arg)
 {
     PIRServer::ProcessPIRStructure *args_ptr = static_cast<PIRServer::ProcessPIRStructure *>(arg);
     int my_id = args_ptr->my_id;
+    size_t db_i = args_ptr->db_i;
     PIRServer *server = args_ptr->server;
 
     int column_per_thread = (server->pir_num_columns_per_obj / 2) / server->NUM_PIR_THREAD;
     int start_idx = my_id * column_per_thread;
     int end_idx = start_idx + column_per_thread - 1;
 
-    server->pir_results[my_id] = get_sum(server->row_result, start_idx, end_idx, server);
+    server->multimap_pir_results[db_i][my_id] = get_sum(server->multimap_row_result[db_i], start_idx, end_idx, server, db_i);
 
     int mask = 1;
     while (mask <= start_idx)
     {
         if (start_idx & mask)
         {
-            my_rotate_internal(*(server->context), server->pir_results[my_id], -mask, server->galois_keys, MemoryManager::GetPool(), server->TOTAL_MACHINE_THREAD / server->NUM_PIR_THREAD);
+            my_rotate_internal(*(server->context), server->multimap_pir_results[db_i][my_id], -mask, server->galois_keys, MemoryManager::GetPool(), server->TOTAL_MACHINE_THREAD / server->NUM_PIR_THREAD);
         }
         mask <<= 1;
     }
@@ -570,6 +719,38 @@ Ciphertext PIRServer::get_sum(vector<Ciphertext> &query, uint32_t start, uint32_
         {
             temp_ct = query[j];
             my_multiply_plain_ntt(*server->context, temp_ct, server->pir_encoded_db[server->pir_num_query_ciphertext * start + j], server->TOTAL_MACHINE_THREAD / server->NUM_PIR_THREAD);
+            my_add_inplace(*server->context, column_sum, temp_ct);
+        }
+        my_transform_from_ntt_inplace(*server->context, column_sum, server->TOTAL_MACHINE_THREAD / server->NUM_PIR_THREAD);
+        return column_sum;
+    }
+}
+
+Ciphertext PIRServer::get_sum(vector<Ciphertext> &query, uint32_t start, uint32_t end, PIRServer *server, size_t db_i)
+{
+    if (start != end)
+    {
+        int count = (end - start) + 1;
+        int next_power_of_two = get_next_power_of_two(count);
+        int mid = next_power_of_two / 2;
+
+        seal::Ciphertext left_sum = get_sum(query, start, start + mid - 1, server, db_i);
+        seal::Ciphertext right_sum = get_sum(query, start + mid, end, server, db_i);
+        my_rotate_internal(*server->context, right_sum, -mid, server->galois_keys, server->column_pools[0], server->TOTAL_MACHINE_THREAD / server->NUM_PIR_THREAD);
+        my_add_inplace(*server->context, left_sum, right_sum);
+        return left_sum;
+    }
+    else
+    {
+
+        seal::Ciphertext column_sum = query[0];
+        seal::Ciphertext temp_ct;
+        my_multiply_plain_ntt(*server->context, column_sum, server->multimap_pir_encoded_db[db_i][server->pir_num_query_ciphertext * start], server->TOTAL_MACHINE_THREAD / server->NUM_PIR_THREAD);
+
+        for (int j = 1; j < server->pir_num_query_ciphertext; j++)
+        {
+            temp_ct = query[j];
+            my_multiply_plain_ntt(*server->context, temp_ct, server->multimap_pir_encoded_db[db_i][server->pir_num_query_ciphertext * start + j], server->TOTAL_MACHINE_THREAD / server->NUM_PIR_THREAD);
             my_add_inplace(*server->context, column_sum, temp_ct);
         }
         my_transform_from_ntt_inplace(*server->context, column_sum, server->TOTAL_MACHINE_THREAD / server->NUM_PIR_THREAD);

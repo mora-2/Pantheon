@@ -56,6 +56,7 @@ public:
 
     /* Reconstruct */
     vector<uint64_t> Reconstruct(std::stringstream &ss);
+    vector<vector<uint64_t>> Reconstruct(std::stringstream &ss, size_t num_multimap);
     string ReconstructStr(std::stringstream &ss);
 
     ~PIRClient() = default;

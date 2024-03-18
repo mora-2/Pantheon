@@ -24,8 +24,12 @@ using pantheon::PantheonInterface;
 using pantheon::QueryStream;
 using pantheon::ResponseStream;
 
+uint32_t key_size = 64;
+uint32_t obj_size = 128;
+
 int main(int argc, char *argv[])
 {
+    string target_str = "219.245.186.51:50051";
     /* client ID */
     Params input;
     ParamsParse(argc, argv, input);
@@ -37,11 +41,8 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    uint32_t key_size = 64;
-    uint32_t obj_size = 128;
     PIRClient client(key_size, obj_size);
 
-    string target_str = "localhost:50051";
     PantheonClient rpc_client(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()), &client, clientID);
 
     /*-----------------------------------------------------------------*/
