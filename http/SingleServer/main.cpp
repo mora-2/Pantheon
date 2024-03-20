@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
 #pragma region args
     double alpha;
     size_t max_value;
-    uint64_t total_samples = pow(2, 14);
+    uint64_t total_samples;
     uint32_t key_size;
     uint32_t obj_size;
     string result_filepath;
@@ -32,11 +32,11 @@ int main(int argc, char *argv[])
         case 'm':
             max_value = stoi(optarg);
             break;
-        case 's':
-            obj_size = stoi(optarg);
-            break;
         case 'k':
             key_size = stoi(optarg);
+            break;
+        case 's':
+            obj_size = stoi(optarg);
             break;
         case 'w':
             result_filepath = optarg;
@@ -102,11 +102,12 @@ int main(int argc, char *argv[])
     /*                           SetupDB                               */
     /*-----------------------------------------------------------------*/
     server.SetupDB();
+    cout << "[2. SetupDB] Finished." << endl;
 
     /*-----------------------------------------------------------------*/
     /*                           QueryMake                             */
     /*-----------------------------------------------------------------*/
-    int desired_index = 0;
+    int desired_index = 1;
     client.QueryMake(desired_index);
 
     /*-----------------------------------------------------------------*/
@@ -119,6 +120,7 @@ int main(int argc, char *argv[])
 
     auto end = chrono::high_resolution_clock::now();
     auto expansion_time = (chrono::duration_cast<chrono::milliseconds>(end - start)).count();
+    cout << "[3. QueryExpand] Elapsed(ms): " << expansion_time << endl;
     /*-----------------------------------------------------------------*/
     /*                           Process1                              */
     /*-----------------------------------------------------------------*/
@@ -128,6 +130,7 @@ int main(int argc, char *argv[])
 
     end = chrono::high_resolution_clock::now();
     auto step1_time = (chrono::duration_cast<chrono::milliseconds>(end - start)).count();
+    cout << "[4. Equality Check] Process1(ms): " << step1_time << endl;
     /*-----------------------------------------------------------------*/
     /*                           Process2                              */
     /*-----------------------------------------------------------------*/
@@ -136,6 +139,7 @@ int main(int argc, char *argv[])
 
     end = chrono::high_resolution_clock::now();
     auto step2_time = (chrono::duration_cast<chrono::milliseconds>(end - start)).count();
+    cout << "[5. PIR] Process2(ms): " << step2_time << endl;
     auto total_end = chrono::high_resolution_clock::now();
     auto total_time = (chrono::duration_cast<chrono::milliseconds>(total_end - total_start)).count();
     /*-----------------------------------------------------------------*/
@@ -149,13 +153,33 @@ int main(int argc, char *argv[])
     bool incorrect_result = false;
     for (size_t db_i = 0; db_i < server.num_multimap; db_i++)
     {
+        bool flag = true;
         for (int i = 0; i < server.pir_obj_size / 4; i++)
         {
             if ((server.multimap_pir_db[db_i][desired_index][i] != decoded_response[db_i][i]) || (server.multimap_pir_db[db_i][desired_index][i + server.pir_obj_size / 4] != decoded_response[db_i][i + N / 2]))
             {
                 incorrect_result = true;
-                break;
+
+                flag = false;
+                // break;
             }
+            if (flag == false)
+            {
+                cout << "[" << db_i << "]  pir_db: " << server.multimap_pir_db[db_i][desired_index][i] << "  " << server.multimap_pir_db[db_i][desired_index][i + server.pir_obj_size / 4] << endl;
+                cout << "[" << db_i << "]response: " << decoded_response[db_i][i] << "  " << decoded_response[db_i][i + N / 2] << endl;
+            }
+            else
+            {
+                cout << "[" << db_i << "]response: " << decoded_response[db_i][i] << "  " << decoded_response[db_i][i + N / 2] << endl;
+            }
+        }
+        if (flag == false)
+        {
+            cout << "db_i: " << db_i << "  InCorrect!" << endl;
+        }
+        else
+        {
+            cout << "db_i: " << db_i << "  Correct!" << endl;
         }
     }
     if (incorrect_result)
@@ -173,6 +197,7 @@ int main(int argc, char *argv[])
     metrics["pareto_alpha"] = alpha;
     metrics["pareto_max_value"] = max_value;
     metrics["number_of_items"] = total_samples;
+    metrics["number_true_samples"] = server.number_of_items_total;
     metrics["num_multimap"] = server.num_multimap;
     metrics["keyword_bitlength"] = key_size;
     metrics["item_Bytesize"] = obj_size;

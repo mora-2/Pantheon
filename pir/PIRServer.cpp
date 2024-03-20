@@ -276,6 +276,8 @@ void PIRServer::Process2()
 
         Ciphertext final_result = multimap_pir_results[db_i][0];
         final_result.save(this->ss);
+        cout << "db_i: " << db_i << "    stream saved."
+             << "  stream size: " << this->ss.str().size() << endl;
     }
 }
 
@@ -571,7 +573,7 @@ std::pair<unique_ptr<vector<uint64_t>>, uint64_t> PIRServer::generateDiscretePar
         total_item += x;
         counter++;
     }
-    std::cout << "Total items generated: " << total_item << std::endl;
+    std::cout << "[1. sampling] Total items generated: " << total_item << std::endl;
     return {std::move(_data), total_item};
 }
 

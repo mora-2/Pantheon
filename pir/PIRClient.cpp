@@ -91,7 +91,7 @@ void PIRClient::QueryMake(int desired_index)
     this->desired_index = desired_index;
     vector<uint64_t> client_query_mat(N, 0ULL);
 
-    int val = desired_index + 1;
+    int val = desired_index;
     const char str[] = {val & 0xFF, (val >> 8) & 0xFF, (val >> 16) & 0xFF, (val >> 24) & 0xFF, 0};
 
     unsigned char hash[SHA256_DIGEST_LENGTH];
@@ -172,6 +172,7 @@ vector<uint64_t> PIRClient::Reconstruct(std::stringstream &ss)
 }
 vector<vector<uint64_t>> PIRClient::Reconstruct(std::stringstream &ss, size_t num_multimap)
 {
+    cout << "received stream size:" << ss.str().size() << endl;
     vector<vector<uint64_t>> decoded_response;
     for (size_t i = 0; i < num_multimap; i++)
     {
