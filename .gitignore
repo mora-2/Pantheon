@@ -449,3 +449,15 @@ http/gRPC/server/data/jack/keys
 http/gRPC/server/data/jack/oneciphertext
 http/gRPC/client/data/duke/crypto_params
 http/gRPC/client/data/duke/crypto_secretkey
+http/SingleServer/scripts/exp.sh
+http/SingleServer/scripts/k-v.sh
+http/SingleServer/scripts/m.sh
+http/SingleServer/scripts/n-k.sh
+http/SingleServer/scripts/n-v.sh
+http/SingleServer/scripts/k-v/results.csv
+http/SingleServer/scripts/m/results.csv
+http/SingleServer/scripts/m/results1.csv
+http/SingleServer/scripts/n-k/results.csv
+http/SingleServer/scripts/n-k/results1.csv
+http/SingleServer/scripts/n-v/results.csv
+http/SingleServer/scripts/n-v/results1.csv

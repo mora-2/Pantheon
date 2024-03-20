@@ -8,9 +8,13 @@
 #include <cassert>
 #include <fstream>
 
+const size_t PIRServer::INVALID_KEY = 0;
+
 PIRServer::PIRServer(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size)
 {
-    this->num_multimap = 0;
+    this->keyword_freq_ptr = nullptr;
+    this->num_multimap = 1;
+    this->number_of_items_total = number_of_items;
     this->SetupDBParams(number_of_items, key_size, obj_size);
     this->SetupMemPool();
     this->SetupPIRParams();
@@ -19,6 +23,23 @@ PIRServer::PIRServer(uint64_t number_of_items, uint32_t key_size, uint32_t obj_s
 
 PIRServer::PIRServer(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size, uint32_t num_multimap)
 {
+    this->keyword_freq_ptr = nullptr;
+    this->number_of_items_total = number_of_items * num_multimap;
+    this->SetupDBParams(number_of_items, key_size, obj_size, num_multimap);
+    this->SetupMemPool();
+    this->SetupPIRParams();
+    this->SetupThreadParams();
+}
+
+PIRServer::PIRServer(ParetoParams pareto, uint32_t key_size, uint32_t obj_size)
+{
+    auto samples_pair = this->generateDiscretePareto(pareto.alpha, pareto.max_value, pareto.num_samples);
+    this->number_of_items_total = samples_pair.second; // total samples
+    this->keyword_freq_ptr = std::move(samples_pair.first);
+    assert(keyword_freq_ptr->size() <= UINT32_MAX); // num of keyword limited up to 2^32
+
+    uint64_t num_multimap = *std::max_element(keyword_freq_ptr->begin(), keyword_freq_ptr->end()); // max frequency
+    uint64_t number_of_items = ceil(number_of_items_total / (double)num_multimap);
     this->SetupDBParams(number_of_items, key_size, obj_size, num_multimap);
     this->SetupMemPool();
     this->SetupPIRParams();
@@ -54,8 +75,9 @@ void PIRServer::RecOneCiphertext(std::stringstream &one_ct_ss)
 
 void PIRServer::SetupDB()
 {
+
     if (this->num_multimap == 0)
-    {
+    { // is multiple mapping
         this->pir_db.resize(0);
         populate_db();
         for (int i = 0; i < pir_num_obj; i++)
@@ -77,8 +99,14 @@ void PIRServer::SetupDB()
         {
             e.resize(0);
         }
-
-        this->populate_multimap_db();
+        if (this->keyword_freq_ptr == nullptr)
+        { // is db sampled from Pareto distribution
+            this->populate_multimap_db();
+        }
+        else
+        { // sample from Pareto, multimap
+            this->pareto_multimap_db();
+        }
 
         this->multimap_pir_encoded_db.resize(num_multimap);
         for (size_t db_i = 0; db_i < this->num_multimap; db_i++)
@@ -386,6 +414,94 @@ void PIRServer::populate_multimap_db()
     return;
 }
 
+void PIRServer::pareto_multimap_db()
+{
+    assert(this->keyword_freq_ptr != nullptr);
+
+    vector<uint64_t> *key_ptr = this->keyword_freq_ptr.get(); // sort key
+
+    vector<vector<uint32_t>> multikey_db(this->num_multimap, vector<uint32_t>(0)); // build key sub dbs
+    uint32_t index = 0, populate_key = 1;                                          // INVALID_KEY = 0
+
+    for (uint32_t i = 0; i < (*key_ptr).size(); i++)
+    {
+        for (uint32_t j = 0; j < (*key_ptr)[i]; j++)
+        {
+            multikey_db[index % this->num_multimap].push_back(populate_key);
+            index++;
+        }
+        populate_key++;
+    }
+    while (index != this->number_of_items * this->num_multimap)
+    { // pad INVALID_KEY = 0
+        multikey_db[index % this->num_multimap].push_back(PIRServer::INVALID_KEY);
+        index++;
+    }
+
+    // ofstream logfile("/home/yuance/Work/Encryption/PIR/code/PIR/Pantheon/http/SingleServer/bin/log.csv");
+    // if (logfile.is_open())
+    // {
+    //     for (const auto sub : multikey_db)
+    //     {
+    //         for (const uint64_t e : sub)
+    //         {
+    //             logfile << e << ",";
+    //         }
+    //         logfile << endl;
+    //     }
+    //     logfile.close();
+    // }
+
+    this->multimap_db.resize(this->num_multimap);
+    for (vector<vector<Plaintext>> &e : this->multimap_db)
+    {
+        e.resize(0);
+    }
+
+    for (size_t db_i = 0; db_i < this->num_multimap; db_i++)
+    {
+        vector<vector<uint64_t>> mat_db;
+        for (int i = 0; i < NUM_ROW * NUM_COL; i++)
+        {
+            vector<uint64_t> v(N, 0ULL);
+            mat_db.push_back(v);
+        }
+        unsigned char hash[SHA256_DIGEST_LENGTH];
+
+        for (uint32_t row = 0; row < NUM_ROW * (N / 2); row++)
+        {
+            uint32_t key;
+            if (row < multikey_db[db_i].size())
+                key = multikey_db[db_i][row];
+            else
+                key = PIRServer::INVALID_KEY;
+            uint32_t val = key;
+            uint32_t row_in_vector = row % (N / 2);
+            const char str[] = {val & 0xFF, (val >> 8) & 0xFF, (val >> 16) & 0xFF, (val >> 24) & 0xFF, 0};
+            sha256(str, 4, hash);
+            for (int col = 0; col < NUM_COL; col++)
+            { // key bitsize
+                int vector_idx = (row / (N / 2)) * NUM_COL + col;
+                mat_db[vector_idx][row_in_vector] = (uint64_t(hash[4 * col]) << 8) + hash[4 * col + 1];
+                mat_db[vector_idx][row_in_vector + (N / 2)] = (uint64_t(hash[4 * col + 2]) << 8) + hash[4 * col + 3];
+            }
+        }
+
+        for (int i = 0; i < NUM_ROW; i++)
+        {
+            vector<Plaintext> row_partition;
+            for (int j = 0; j < NUM_COL; j++)
+            {
+                Plaintext pt;
+                batch_encoder->encode(mat_db[i * NUM_COL + j], pt);
+                row_partition.push_back(pt);
+            }
+            multimap_db[db_i].push_back(row_partition);
+        }
+    }
+    return;
+}
+
 void PIRServer::populate_db(vector<string> &keydb)
 {
     vector<vector<uint64_t>> mat_db;
@@ -434,6 +550,29 @@ void PIRServer::populate_db(vector<string> &keydb)
         db.push_back(row_partition);
     }
     return;
+}
+
+std::pair<unique_ptr<vector<uint64_t>>, uint64_t> PIRServer::generateDiscretePareto(double alpha, uint64_t maxVal, uint64_t numSamples)
+{
+    std::mt19937 rng(std::random_device{}());
+    std::uniform_real_distribution<double> uniformDist(0.0, 1.0);
+    std::unique_ptr<std::vector<uint64_t>> _data = std::make_unique<std::vector<uint64_t>>();
+    uint64_t counter = 0, total_item = 0, x = 0, num_keys = 0;
+    while (total_item < numSamples)
+    {
+
+        double u = uniformDist(rng);
+        x = static_cast<uint64_t>(std::pow(u, -1.0 / alpha));
+        if (x > maxVal)
+        {
+            x = maxVal;
+        }
+        _data->push_back(x);
+        total_item += x;
+        counter++;
+    }
+    std::cout << "Total items generated: " << total_item << std::endl;
+    return {std::move(_data), total_item};
 }
 
 void PIRServer::sha256(const char *str, int len, unsigned char *dest)

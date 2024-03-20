@@ -11,12 +11,14 @@ class PIRServer
 public:
     /* database params */
     uint64_t number_of_items;
+    uint64_t number_of_items_total;
     uint32_t key_size; // in bits
     uint32_t obj_size;
     uint32_t num_multimap;
     int NUM_ROW;
     int NUM_COL;
 
+    unique_ptr<vector<uint64_t>> keyword_freq_ptr;
     vector<vector<Plaintext>> db;
     vector<vector<vector<Plaintext>>> multimap_db;
     seal::parms_id_type compact_pid; // for one ctx used in db encode
@@ -31,6 +33,13 @@ public:
     uint32_t pir_db_rows;
 
     /* Setup DB */
+    struct ParetoParams
+    {
+        double alpha;
+        size_t max_value;
+        size_t num_samples;
+        ParetoParams(double alpha, size_t max_value, size_t num_samples) : alpha(alpha), max_value(max_value), num_samples(num_samples) {}
+    };
     vector<vector<uint64_t>> pir_db; // 64 bit placeholder for 16 bit plaintext coefficients
     vector<vector<vector<uint64_t>>> multimap_pir_db;
     vector<Plaintext> pir_encoded_db;
@@ -68,6 +77,8 @@ public:
     std::stringstream ss;
 
 private:
+    static const size_t INVALID_KEY;
+
     int NUM_COL_THREAD; // sub thread
     int NUM_ROW_THREAD; // main thread
     int NUM_PIR_THREAD;
@@ -119,6 +130,7 @@ private:
 public:
     PIRServer(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size);
     PIRServer(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size, uint32_t num_multimap);
+    PIRServer(ParetoParams pareto, uint32_t key_size, uint32_t obj_size);
     /* Crypto setup */
     void SetupCryptoParams();
     //-----------> send parms_ss
@@ -151,7 +163,9 @@ private:
     void SetupPIRParams();
     void populate_db();
     void populate_multimap_db();
+    void pareto_multimap_db();
     void populate_db(vector<string> &keydb);
+    std::pair<unique_ptr<vector<uint64_t>>, uint64_t> generateDiscretePareto(double alpha, uint64_t maxVal, uint64_t numSamples);
     void sha256(const char *str, int len, unsigned char *dest);
     void set_pir_db(std::vector<std::vector<uint64_t>> db);
     void pir_encode_db(std::vector<std::vector<uint64_t>> db);
