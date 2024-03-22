@@ -58,6 +58,7 @@ public:
     vector<uint64_t> Reconstruct(std::stringstream &ss);
     vector<vector<uint64_t>> Reconstruct(std::stringstream &ss, size_t num_multimap);
     string ReconstructStr(std::stringstream &ss);
+    vector<vector<uint64_t>> Reconstruct(std::stringstream &ss, size_t num_multimap, vector<uint32_t> &db_index);
 
     ~PIRClient() = default;
 

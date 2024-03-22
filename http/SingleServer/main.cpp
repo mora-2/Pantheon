@@ -145,27 +145,42 @@ int main(int argc, char *argv[])
     /*-----------------------------------------------------------------*/
     /*                           Reconstruct                           */
     /*-----------------------------------------------------------------*/
-    auto decoded_response = client.Reconstruct(server.ss, server.num_multimap);
+    vector<uint32_t> db_index;
+    server.DBIndexSearch(desired_index, db_index);
+    auto decoded_response = client.Reconstruct(server.ss, server.num_multimap, db_index);
 
     /*-----------------------------------------------------------------*/
     /*                           Validate                              */
     /*-----------------------------------------------------------------*/
+
     bool incorrect_result = false;
     for (size_t db_i = 0; db_i < server.num_multimap; db_i++)
     {
         bool flag = true;
         for (int i = 0; i < server.pir_obj_size / 4; i++)
         {
-            if ((server.multimap_pir_db[db_i][desired_index][i] != decoded_response[db_i][i]) || (server.multimap_pir_db[db_i][desired_index][i + server.pir_obj_size / 4] != decoded_response[db_i][i + N / 2]))
+            if (db_index[db_i] == PIRServer::INVALID_INDEX)
             {
-                incorrect_result = true;
+                if ((0 != decoded_response[db_i][i]) || (0 != decoded_response[db_i][i + N / 2]))
+                {
+                    incorrect_result = true;
 
-                flag = false;
-                // break;
+                    flag = false;
+                    // break;
+                }
+            }
+            else
+            {
+                if ((server.multimap_pir_db[db_i][db_index[db_i]][i] != decoded_response[db_i][i]) || (server.multimap_pir_db[db_i][db_index[db_i]][i + server.pir_obj_size / 4] != decoded_response[db_i][i + N / 2]))
+                {
+                    incorrect_result = true;
+                    flag = false;
+                    // break;
+                }
             }
             if (flag == false)
             {
-                cout << "[" << db_i << "]  pir_db: " << server.multimap_pir_db[db_i][desired_index][i] << "  " << server.multimap_pir_db[db_i][desired_index][i + server.pir_obj_size / 4] << endl;
+                cout << "[" << db_i << "]  pir_db: " << server.multimap_pir_db[db_i][db_index[db_i]][i] << "  " << server.multimap_pir_db[db_i][db_index[db_i]][i + server.pir_obj_size / 4] << endl;
                 cout << "[" << db_i << "]response: " << decoded_response[db_i][i] << "  " << decoded_response[db_i][i + N / 2] << endl;
             }
             else

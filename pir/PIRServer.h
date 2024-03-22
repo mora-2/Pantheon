@@ -18,6 +18,7 @@ public:
     int NUM_ROW;
     int NUM_COL;
 
+    vector<vector<uint32_t>> multikey_db;
     unique_ptr<vector<uint64_t>> keyword_freq_ptr;
     vector<vector<Plaintext>> db;
     vector<vector<vector<Plaintext>>> multimap_db;
@@ -75,6 +76,9 @@ public:
 
     /* datastream */
     std::stringstream ss;
+
+public:
+    static const uint32_t INVALID_INDEX;
 
 private:
     static const size_t INVALID_KEY;
@@ -180,4 +184,7 @@ private:
     static Ciphertext get_sum(vector<Ciphertext> &query, uint32_t start, uint32_t end, PIRServer *server, size_t db_i);
     static uint32_t get_next_power_of_two(uint32_t number);
     static uint32_t get_number_of_bits(uint64_t number);
+
+public:
+    void DBIndexSearch(uint32_t desired_index, vector<uint32_t> &db_index);
 };

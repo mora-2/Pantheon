@@ -9,6 +9,7 @@
 #include <fstream>
 
 const size_t PIRServer::INVALID_KEY = 0;
+const uint32_t PIRServer::INVALID_INDEX = -1;
 
 PIRServer::PIRServer(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size)
 {
@@ -422,8 +423,8 @@ void PIRServer::pareto_multimap_db()
 
     vector<uint64_t> *key_ptr = this->keyword_freq_ptr.get(); // sort key
 
-    vector<vector<uint32_t>> multikey_db(this->num_multimap, vector<uint32_t>(0)); // build key sub dbs
-    uint32_t index = 0, populate_key = 1;                                          // INVALID_KEY = 0
+    this->multikey_db.resize(this->num_multimap, vector<uint32_t>(0)); // build key sub dbs
+    uint32_t index = 0, populate_key = 1;                              // INVALID_KEY = 0
 
     for (uint32_t i = 0; i < (*key_ptr).size(); i++)
     {
@@ -919,4 +920,20 @@ uint32_t PIRServer::get_number_of_bits(uint64_t number)
         number /= 2;
     }
     return count;
+}
+
+void PIRServer::DBIndexSearch(uint32_t desired_index, vector<uint32_t> &db_index)
+{
+    for (uint32_t db_i = 0; db_i < this->num_multimap; db_i++)
+    {
+        for (uint32_t row_index = 0; row_index < this->multikey_db[db_i].size(); row_index++)
+        {
+            if (this->multikey_db[db_i][row_index] == desired_index)
+            {
+                db_index.push_back(row_index);
+                break;
+            }
+             db_index.push_back(PIRServer::INVALID_INDEX);
+        }
+    }
 }
