@@ -178,24 +178,24 @@ int main(int argc, char *argv[])
                     // break;
                 }
             }
-            if (flag == false)
-            {
-                cout << "[" << db_i << "]  pir_db: " << server.multimap_pir_db[db_i][db_index[db_i]][i] << "  " << server.multimap_pir_db[db_i][db_index[db_i]][i + server.pir_obj_size / 4] << endl;
-                cout << "[" << db_i << "]response: " << decoded_response[db_i][i] << "  " << decoded_response[db_i][i + N / 2] << endl;
-            }
-            else
-            {
-                cout << "[" << db_i << "]response: " << decoded_response[db_i][i] << "  " << decoded_response[db_i][i + N / 2] << endl;
-            }
+        //     if (flag == false)
+        //     {
+        //         cout << "[" << db_i << "]  pir_db: " << server.multimap_pir_db[db_i][db_index[db_i]][i] << "  " << server.multimap_pir_db[db_i][db_index[db_i]][i + server.pir_obj_size / 4] << endl;
+        //         cout << "[" << db_i << "]response: " << decoded_response[db_i][i] << "  " << decoded_response[db_i][i + N / 2] << endl;
+        //     }
+        //     else
+        //     {
+        //         cout << "[" << db_i << "]response: " << decoded_response[db_i][i] << "  " << decoded_response[db_i][i + N / 2] << endl;
+        //     }
         }
-        if (flag == false)
-        {
-            cout << "db_i: " << db_i << "  InCorrect!" << endl;
-        }
-        else
-        {
-            cout << "db_i: " << db_i << "  Correct!" << endl;
-        }
+        // if (flag == false)
+        // {
+        //     cout << "db_i: " << db_i << "  InCorrect!" << endl;
+        // }
+        // else
+        // {
+        //     cout << "db_i: " << db_i << "  Correct!" << endl;
+        // }
     }
     if (incorrect_result)
     {

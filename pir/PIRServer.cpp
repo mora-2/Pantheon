@@ -287,8 +287,8 @@ void PIRServer::Process2()
         evaluator->rotate_rows_inplace(final_result, - static_cast<int>(obj_size)/4, this->galois_keys);// right rotation
         evaluator->add_inplace(final_result, multimap_pir_results[db_i][0]);
         final_result.save(this->ss);
-        cout << "db_i: " << db_i << "    stream saved."
-             << "  stream size: " << this->ss.str().size() << endl;
+        // cout << "db_i: " << db_i << "    stream saved."
+        //      << "  stream size: " << this->ss.str().size() << endl;
     }
 
 }
