@@ -18,7 +18,7 @@ function(seal_enable_cxx_compiler_flag_if_supported flag)
 endfunction()
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-seal_enable_cxx_compiler_flag_if_supported("-g -O0")
+seal_enable_cxx_compiler_flag_if_supported("-g -O3")
 
 set(SOURCE_FILES  PIRClient.cpp PIRServer.cpp globals.cpp utils.cpp)
 file(GLOB HEADERS "*.h")

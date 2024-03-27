@@ -477,3 +477,11 @@ http/SingleServer/scripts/pareto/exp.sh
 http/SingleServer/scripts/pareto/f5n20.sh
 http/SingleServer/scripts/pareto/f5n24.sh
 http/SingleServer/scripts/pareto/f5n20/results.csv
+http/SingleServer/galois.txt
+http/SingleServer/log.csv
+http/SingleServer/scripts/pareto/n-alpha.sh
+http/SingleServer/scripts/pareto/spy.sh
+http/SingleServer/scripts/pareto/v.sh
+http/SingleServer/scripts/pareto/-exp-/results.csv
+http/SingleServer/scripts/pareto/f5n24/results.csv
+http/SingleServer/scripts/pareto/v/results.csv

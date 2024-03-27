@@ -275,11 +275,22 @@ void PIRServer::Process2()
             my_add_inplace(*context, multimap_pir_results[db_i][0], multimap_pir_results[db_i][i]);
         }
 
-        Ciphertext final_result = multimap_pir_results[db_i][0];
+        // Ciphertext final_result = multimap_pir_results[db_i][0];
+        // final_result.save(this->ss);
+        // cout << "db_i: " << db_i << "    stream saved."
+        //      << "  stream size: " << this->ss.str().size() << endl;
+    }
+    Ciphertext final_result = multimap_pir_results[0][0];
+    final_result.save(this->ss);
+    for (size_t db_i = 1; db_i < this->num_multimap; db_i++)
+    {
+        evaluator->rotate_rows_inplace(final_result, - static_cast<int>(obj_size)/4, this->galois_keys);// right rotation
+        evaluator->add_inplace(final_result, multimap_pir_results[db_i][0]);
         final_result.save(this->ss);
         cout << "db_i: " << db_i << "    stream saved."
              << "  stream size: " << this->ss.str().size() << endl;
     }
+
 }
 
 void PIRServer::SetupDBParams(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size)

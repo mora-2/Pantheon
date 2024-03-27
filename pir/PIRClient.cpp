@@ -3,6 +3,7 @@
 #include <set>
 #include <openssl/sha.h>
 #include "utils.h"
+#include <fstream>
 
 PIRClient::PIRClient(uint32_t key_size, uint32_t obj_size)
 {
@@ -21,18 +22,23 @@ void PIRClient::SetupCrypto(std::stringstream &parms_ss)
 
     this->keygen->create_relin_keys().save(this->keys_ss);
     GaloisKeys galois_keys;
-    set<int> rotation_steps;
-    rotation_steps.insert(0);
-    for (int i = N / (2 * NUM_COL); i < N / 2; i *= 2)
-    {
-        rotation_steps.insert(i);
-    }
+    /*
+        set<int> rotation_steps;    
+        rotation_steps.insert(0);
+        for (int i = N / (2 * NUM_COL); i < N / 2; i *= 2)
+        {
+            rotation_steps.insert(i);
+        }
 
-    for (int i = 1; i < (pir_num_columns_per_obj / 2); i *= 2)
-    {
-        rotation_steps.insert(-i);
-    }
-    keygen->create_galois_keys(vector<int>(rotation_steps.begin(), rotation_steps.end()), galois_keys);
+        for (int i = 1; i < (pir_num_columns_per_obj / 2); i *= 2)
+        {
+            rotation_steps.insert(-i);
+        }
+
+        keygen->create_galois_keys(vector<int>(rotation_steps.begin(), rotation_steps.end()), galois_keys);
+    */
+
+    keygen->create_galois_keys(galois_keys);
     galois_keys.save(keys_ss);
 
     this->batch_encoder = std::make_unique<BatchEncoder>(*context);
@@ -195,6 +201,7 @@ vector<vector<uint64_t>> PIRClient::Reconstruct(std::stringstream &ss, size_t nu
 {
     cout << "received stream size:" << ss.str().size() << endl;
     vector<vector<uint64_t>> decoded_response;
+    std::ofstream log("/home/yuance/Work/Encryption/PIR/code/PIR/Pantheon/http/SingleServer/log.csv", std::ios_base::app);
     for (size_t i = 0; i < num_multimap; i++)
     {
         Ciphertext final_result;
@@ -205,10 +212,19 @@ vector<vector<uint64_t>> PIRClient::Reconstruct(std::stringstream &ss, size_t nu
         decryptor->decrypt(final_result, result_pt);
         batch_encoder->decode(result_pt, result_mat);
 
+        for (uint64_t i = 0; i < result_mat.size(); i++)
+        {
+            if (i == (result_mat.size() / 2))
+                log << std::endl;
+            log << result_mat[i] << ",";
+        }
+
         vector<uint64_t> response;
         response = rotate_plain(result_mat, db_index[i] % row_size);
         decoded_response.push_back(response);
+        log << std::endl;
     }
+    log.close();
     return decoded_response;
 }
 
