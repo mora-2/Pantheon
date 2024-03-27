@@ -38,6 +38,8 @@ PIRServer::PIRServer(ParetoParams pareto, uint32_t key_size, uint32_t obj_size)
     this->number_of_items_total = samples_pair.second; // total samples
     this->keyword_freq_ptr = std::move(samples_pair.first);
     assert(keyword_freq_ptr->size() <= UINT32_MAX); // num of keyword limited up to 2^32
+    
+
 
     uint64_t num_multimap = *std::max_element(keyword_freq_ptr->begin(), keyword_freq_ptr->end()); // max frequency
     uint64_t number_of_items = ceil(number_of_items_total / (double)num_multimap);
@@ -572,14 +574,18 @@ std::pair<unique_ptr<vector<uint64_t>>, uint64_t> PIRServer::generateDiscretePar
     std::uniform_real_distribution<double> uniformDist(0.0, 1.0);
     std::unique_ptr<std::vector<uint64_t>> _data = std::make_unique<std::vector<uint64_t>>();
     uint64_t counter = 0, total_item = 0, x = 0, num_keys = 0;
-    while (total_item < numSamples)
+    while (true)
     {
-
         double u = uniformDist(rng);
         x = static_cast<uint64_t>(std::pow(u, -1.0 / alpha));
         if (x > maxVal)
         {
             x = maxVal;
+        }
+
+        if(total_item + x > numSamples)
+        {
+            break;
         }
         _data->push_back(x);
         total_item += x;

@@ -223,6 +223,7 @@ int main(int argc, char *argv[])
     metrics["PIR_time (ms)"] = step2_time;
     metrics["total_time (ms)"] = total_time;
     metrics["correct"] = !incorrect_result;
+    metrics["sub_db_size"] = server.number_of_items;
 
     std::ofstream output_file(result_filepath, std::ios::app);
 
