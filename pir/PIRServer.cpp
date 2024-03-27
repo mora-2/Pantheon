@@ -38,8 +38,6 @@ PIRServer::PIRServer(ParetoParams pareto, uint32_t key_size, uint32_t obj_size)
     this->number_of_items_total = samples_pair.second; // total samples
     this->keyword_freq_ptr = std::move(samples_pair.first);
     assert(keyword_freq_ptr->size() <= UINT32_MAX); // num of keyword limited up to 2^32
-    
-
 
     uint64_t num_multimap = *std::max_element(keyword_freq_ptr->begin(), keyword_freq_ptr->end()); // max frequency
     uint64_t number_of_items = ceil(number_of_items_total / (double)num_multimap);
@@ -286,13 +284,12 @@ void PIRServer::Process2()
     final_result.save(this->ss);
     for (size_t db_i = 1; db_i < this->num_multimap; db_i++)
     {
-        evaluator->rotate_rows_inplace(final_result, - static_cast<int>(obj_size)/4, this->galois_keys);// right rotation
+        evaluator->rotate_rows_inplace(final_result, -static_cast<int>(obj_size) / 4, this->galois_keys); // right rotation
         evaluator->add_inplace(final_result, multimap_pir_results[db_i][0]);
         final_result.save(this->ss);
         // cout << "db_i: " << db_i << "    stream saved."
         //      << "  stream size: " << this->ss.str().size() << endl;
     }
-
 }
 
 void PIRServer::SetupDBParams(uint64_t number_of_items, uint32_t key_size, uint32_t obj_size)
@@ -574,6 +571,13 @@ std::pair<unique_ptr<vector<uint64_t>>, uint64_t> PIRServer::generateDiscretePar
     std::uniform_real_distribution<double> uniformDist(0.0, 1.0);
     std::unique_ptr<std::vector<uint64_t>> _data = std::make_unique<std::vector<uint64_t>>();
     uint64_t counter = 0, total_item = 0, x = 0, num_keys = 0;
+
+    assert(numSamples >= maxVal);
+    // add maxVal to make sure at least one element has the maxFrequency(maxVal)
+    _data->push_back(maxVal);
+    total_item += maxVal;
+    counter++;
+
     while (true)
     {
         double u = uniformDist(rng);
@@ -583,7 +587,7 @@ std::pair<unique_ptr<vector<uint64_t>>, uint64_t> PIRServer::generateDiscretePar
             x = maxVal;
         }
 
-        if(total_item + x > numSamples)
+        if (total_item + x > numSamples)
         {
             break;
         }
@@ -950,7 +954,7 @@ void PIRServer::DBIndexSearch(uint32_t desired_index, vector<uint32_t> &db_index
                 db_index.push_back(row_index);
                 break;
             }
-             db_index.push_back(PIRServer::INVALID_INDEX);
+            db_index.push_back(PIRServer::INVALID_INDEX);
         }
     }
 }
